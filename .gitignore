@@ -44,6 +44,9 @@ dev.err.log
 # cloakbrowser persistent profile
 .cloak-profile/
 
+# claude-code per-user local settings
+.claude/settings.local.json
+
 # misc
 lol.txt
 mitm_mcp_traffic.db
