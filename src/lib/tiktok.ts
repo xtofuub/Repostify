@@ -164,9 +164,13 @@ async function dumpDebug(name: string, html: string, png: Buffer) {
   await writeFile(join(dir, `${name}.png`), png).catch(() => {});
 }
 
+type CacheEntry = { at: number; result: ScrapeResult };
+const cache = new Map<string, CacheEntry>();
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 min
+
 export async function scrapeReposts(
   rawUsername: string,
-  opts: { maxScrolls?: number; timeoutMs?: number; maxItems?: number } = {},
+  opts: { maxScrolls?: number; timeoutMs?: number; maxItems?: number; bypassCache?: boolean } = {},
 ): Promise<ScrapeResult> {
   const username = rawUsername.replace(/^@/, "").trim();
   if (!username) throw new Error("Username required");
@@ -177,6 +181,14 @@ export async function scrapeReposts(
   const maxScrolls = opts.maxScrolls ?? 25;
   const timeoutMs = opts.timeoutMs ?? 30_000;
   const maxItems = opts.maxItems ?? Infinity;
+
+  const cacheKey = `${username.toLowerCase()}:${Number.isFinite(maxItems) ? maxItems : "all"}`;
+  if (!opts.bypassCache) {
+    const hit = cache.get(cacheKey);
+    if (hit && Date.now() - hit.at < CACHE_TTL_MS) {
+      return hit.result;
+    }
+  }
 
   const browser = await getBrowser();
   const context = await browser.newContext({
@@ -280,7 +292,7 @@ export async function scrapeReposts(
     await page
       .waitForFunction(
         () => document.querySelectorAll('[role="tab"]').length >= 2,
-        { timeout: 6_000 },
+        { timeout: 3_500 },
       )
       .catch(() => {});
 
@@ -475,21 +487,20 @@ export async function scrapeReposts(
         }
 
         const before = reposts.length;
-        // Human-paced scroll: small steps with short pauses. humanize=true on
-        // the binary already makes mouse.wheel feel real, no need for manual
-        // bezier here.
-        for (let step = 0; step < 8; step++) {
-          await page.mouse.wheel(0, 500 + Math.random() * 300).catch(() => {});
-          await page.waitForTimeout(220 + Math.random() * 280);
+        // Wheel kicks (4 small steps) + scrollIntoView. Empirically TikTok
+        // needs multiple scroll events spread over ~600ms; one big jump makes
+        // its server cut off pagination early.
+        for (let step = 0; step < 4; step++) {
+          await page.mouse.wheel(0, 600).catch(() => {});
+          await page.waitForTimeout(120);
         }
-        // Ensure last item visible to trip IntersectionObserver
         await page
           .evaluate(() => {
             const items = document.querySelectorAll<HTMLElement>(
               'div[data-e2e="user-post-item"]',
             );
             const last = items[items.length - 1];
-            if (last) last.scrollIntoView({ block: "end", behavior: "smooth" });
+            if (last) last.scrollIntoView({ block: "end" });
           })
           .catch(() => {});
 
@@ -499,7 +510,7 @@ export async function scrapeReposts(
             { timeout: 5_000 },
           )
           .catch(() => null);
-        await page.waitForTimeout(800);
+        await page.waitForTimeout(500);
 
         if (reposts.length === before) {
           stagnant++;
@@ -540,6 +551,11 @@ export async function scrapeReposts(
       repostTabFound,
       rehydratedItems,
     };
+  }
+
+  // Cache only non-blocked results to avoid sticky failure state.
+  if (!captchaSuspected && reposts.length > 0) {
+    cache.set(cacheKey, { at: Date.now(), result });
   }
 
   return result;
