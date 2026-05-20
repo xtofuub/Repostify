@@ -509,7 +509,7 @@ function TopCreators({
 }
 
 function RepostGrid({ reposts }: { reposts: Repost[] }) {
-  const [playing, setPlaying] = useState<Repost | null>(null);
+  const [playingIndex, setPlayingIndex] = useState<number | null>(null);
   return (
     <div>
       <div className="flex items-baseline justify-between mb-4">
@@ -517,7 +517,7 @@ function RepostGrid({ reposts }: { reposts: Repost[] }) {
           Reel · {reposts.length} item{reposts.length === 1 ? "" : "s"}
         </p>
         <p className="text-[11px] uppercase tracking-[0.18em] text-white/40">
-          By recency · click to play
+          By recency · click to play · scroll / arrows to navigate
         </p>
       </div>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
@@ -532,11 +532,16 @@ function RepostGrid({ reposts }: { reposts: Repost[] }) {
               ease: [0.16, 1, 0.3, 1],
             }}
           >
-            <RepostCard repost={r} onPlay={setPlaying} />
+            <RepostCard repost={r} onPlay={() => setPlayingIndex(i)} />
           </motion.div>
         ))}
       </div>
-      <RepostPlayer repost={playing} onClose={() => setPlaying(null)} />
+      <RepostPlayer
+        reposts={reposts}
+        index={playingIndex}
+        onClose={() => setPlayingIndex(null)}
+        onIndexChange={setPlayingIndex}
+      />
     </div>
   );
 }

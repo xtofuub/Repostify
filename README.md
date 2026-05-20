@@ -16,23 +16,23 @@ TikTok's reposts tab is a high-signal feed: every video an account chose to ampl
 - **In-browser player** — Click any cover to open a full-screen overlay with TikTok's embed player and a detail panel.
 - **Aggregate stats** — Total plays, likes, comments, shares, and unique creators across the batch.
 - **Top creators ranking** — Counts how often each creator appears and ranks by frequency with horizontal bar charts.
-- **Captcha-aware** — Stops when TikTok throws a slider captcha and labels the result as partial rather than failing silently.
+- **Bot-detection bypass** — cloakbrowser's source-level Chromium patches pass TikTok fingerprinting where stock Playwright hits a captcha wall at ~30 items.
+- **Fetch-limit chips** — Pick 30 / 60 / 120 / 250 / All in the UI; the scraper stops early at your cap.
 - **Image proxy** — TikTok blocks hotlinks; every thumbnail and avatar routes through a server-side proxy with the correct Referer header.
 - **SEO-ready** — Dynamic metadata, JSON-LD structured data (FAQPage, WebApplication, BreadcrumbList, Article), sitemap with popular handles, robots.txt.
 
 ## How it works
 
-1. A headless Chromium (Playwright) loads the public TikTok profile.
-2. Anti-detection patches are applied (`navigator.webdriver`, `chrome.runtime`, plugins, languages).
-3. The cookie banner is dismissed via shadow DOM traversal.
-4. Profile data is extracted from TikTok's `__UNIVERSAL_DATA_FOR_REHYDRATION__` SSR script tag — no rendering wait.
-5. The Reposts tab is located and clicked.
-6. The XHR response from `/api/repost/item_list` is intercepted as it comes over the wire.
-7. The page is scrolled in human-paced increments with random delays, collecting additional pages.
-8. Captcha containers are checked after every scroll — the session stops immediately if one appears.
-9. Results are normalized, deduplicated, sorted by recency, and returned as JSON.
+1. [cloakbrowser](https://github.com/CloakHQ/CloakBrowser) (stealth Chromium with source-level C++ fingerprint patches) loads the public profile.
+2. Cookie banner dismissed via shadow DOM.
+3. Profile data extracted from `__UNIVERSAL_DATA_FOR_REHYDRATION__` SSR script.
+4. Reposts tab located + clicked.
+5. `/api/repost/item_list` XHR responses intercepted as they arrive.
+6. Page scrolled until TikTok returns `hasMore: false` or the user-selected limit is hit.
+7. Tab-error / captcha / blocked-response signals cause early bail.
+8. Results normalized, deduplicated, sorted by recency.
 
-The data you see is the data TikTok's own page would have shown a person scrolling. No undocumented API is called. No account is logged in. Nothing is stored.
+No login. No undocumented API. Nothing stored server-side.
 
 ## Tech stack
 
@@ -44,7 +44,7 @@ The data you see is the data TikTok's own page would have shown a person scrolli
 | Primitives | [@base-ui/react](https://base-ui.com) 1.4.1 (MUI team's new headless library) |
 | Components | shadcn (base-nova style) |
 | Animation | motion 12.38 |
-| Scraping | Playwright 1.59.1 (headless Chromium) |
+| Scraping | [cloakbrowser](https://github.com/CloakHQ/CloakBrowser) 0.3.28 (stealth Chromium, drop-in Playwright API) |
 | Icons | lucide-react |
 | Fonts | Inter + Instrument Serif (via next/font) |
 | Language | TypeScript 5 |
@@ -57,7 +57,9 @@ pnpm install
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Search a TikTok handle.
+First run downloads the cloakbrowser binary (~200MB, cached in `~/.cloakbrowser/`).
+
+Open [http://localhost:3000](http://localhost:3000). Paste a handle. Pick a fetch limit (30 / 60 / 120 / 250 / All). Hit Analyze.
 
 ### Production build
 
@@ -100,11 +102,20 @@ src/
     └── utils.ts            # cn() utility
 ```
 
+## API
+
+```
+GET /api/reposts?username=<handle>&limit=<n>
+```
+
+- `username` — required, TikTok handle without `@`
+- `limit` — optional, max items. Omit or `0` for no cap.
+
 ## Limitations
 
-- **~30 reposts per session** — TikTok throws a slider captcha after the first page of reposts. This tool doesn't solve captchas.
-- **Private reposts tabs** — Many profiles hide their reposts tab. That's a TikTok privacy setting, not something this tool can bypass.
-- **Read-only** — No write operations, no API abuse, no logged-in sessions.
+- **Private reposts tabs** — Many profiles hide their reposts tab. TikTok privacy setting, can't bypass.
+- **Big feeds = slow** — 250+ items can take 1-3 min. Use a tight limit if you only need recent.
+- **Read-only** — No write ops, no logged-in sessions.
 
 ## License
 
