@@ -1,4 +1,5 @@
-import { chromium, type Browser } from "playwright";
+import { launch } from "cloakbrowser";
+import type { Browser } from "playwright";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -128,19 +129,31 @@ function normalizeItem(item: TikTokItem): Repost | null {
 }
 
 let cachedBrowser: Browser | null = null;
+let launching: Promise<Browser> | null = null;
 
 async function getBrowser(): Promise<Browser> {
   if (cachedBrowser && cachedBrowser.isConnected()) return cachedBrowser;
-  cachedBrowser = await chromium.launch({
-    headless: true,
-    args: [
-      "--disable-blink-features=AutomationControlled",
-      "--disable-features=IsolateOrigins,site-per-process",
-      "--no-sandbox",
-      "--disable-web-security",
-    ],
-  });
-  return cachedBrowser;
+  if (launching) return launching;
+  launching = (async () => {
+    // cloakbrowser: source-level stealth Chromium. C++ binary patches handle
+    // canvas/WebGL/audio/fonts/GPU/screen/WebRTC/CDP fingerprints — undetectable
+    // because it's a real browser, not a JS-injected wrapper. humanize=false:
+    // wrapping page.mouse.wheel inflates per-scroll latency to ~1s.
+    const b = (await launch({
+      headless: true,
+      humanize: false,
+      timezone: "America/Los_Angeles",
+      locale: "en-US",
+      launchOptions: { args: ["--no-sandbox"] },
+    })) as unknown as Browser;
+    cachedBrowser = b;
+    return b;
+  })();
+  try {
+    return await launching;
+  } finally {
+    launching = null;
+  }
 }
 
 async function dumpDebug(name: string, html: string, png: Buffer) {
@@ -153,7 +166,7 @@ async function dumpDebug(name: string, html: string, png: Buffer) {
 
 export async function scrapeReposts(
   rawUsername: string,
-  opts: { maxScrolls?: number; timeoutMs?: number } = {},
+  opts: { maxScrolls?: number; timeoutMs?: number; maxItems?: number } = {},
 ): Promise<ScrapeResult> {
   const username = rawUsername.replace(/^@/, "").trim();
   if (!username) throw new Error("Username required");
@@ -162,31 +175,15 @@ export async function scrapeReposts(
   }
 
   const maxScrolls = opts.maxScrolls ?? 25;
-  const timeoutMs = opts.timeoutMs ?? 60_000;
+  const timeoutMs = opts.timeoutMs ?? 30_000;
+  const maxItems = opts.maxItems ?? Infinity;
 
   const browser = await getBrowser();
   const context = await browser.newContext({
-    userAgent:
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
     viewport: { width: 1366, height: 900 },
-    locale: "en-US",
-    timezoneId: "America/Los_Angeles",
     deviceScaleFactor: 1,
-    extraHTTPHeaders: {
-      "Accept-Language": "en-US,en;q=0.9",
-    },
+    extraHTTPHeaders: { "Accept-Language": "en-US,en;q=0.9" },
   });
-
-  await context.addInitScript(() => {
-    Object.defineProperty(navigator, "webdriver", { get: () => undefined });
-    Object.defineProperty(navigator, "languages", {
-      get: () => ["en-US", "en"],
-    });
-    Object.defineProperty(navigator, "plugins", { get: () => [1, 2, 3, 4, 5] });
-    // @ts-expect-error - patch chrome global
-    window.chrome = { runtime: {} };
-  });
-
   const page = await context.newPage();
 
   const reposts: Repost[] = [];
@@ -194,15 +191,27 @@ export async function scrapeReposts(
   let hasMore = false;
   let repostXhrSeen = 0;
 
+  let serverBlocked = false;
   page.on("response", async (res) => {
     const url = res.url();
     if (!/\/api\/repost\/item_list/i.test(url)) return;
     repostXhrSeen++;
+    // Soft-block: TikTok returns non-2xx (often 403/418/451) for sessions it
+    // distrusts. Bail out — no point spinning.
+    if (res.status() >= 400) {
+      serverBlocked = true;
+      return;
+    }
     try {
       const json = (await res.json()) as {
         itemList?: TikTokItem[];
         hasMore?: boolean;
+        statusCode?: number;
       };
+      // statusCode != 0 in body also signals server-side rejection
+      if (json.statusCode && json.statusCode !== 0) {
+        serverBlocked = true;
+      }
       if (Array.isArray(json.itemList)) {
         for (const raw of json.itemList) {
           const norm = normalizeItem(raw);
@@ -238,7 +247,7 @@ export async function scrapeReposts(
     await page
       .waitForSelector(
         'script#__UNIVERSAL_DATA_FOR_REHYDRATION__, [data-e2e="user-title"], [data-e2e="user-page"]',
-        { timeout: 15_000 },
+        { timeout: 8_000 },
       )
       .catch(() => {});
 
@@ -271,7 +280,7 @@ export async function scrapeReposts(
     await page
       .waitForFunction(
         () => document.querySelectorAll('[role="tab"]').length >= 2,
-        { timeout: 15_000 },
+        { timeout: 6_000 },
       )
       .catch(() => {});
 
@@ -418,12 +427,39 @@ export async function scrapeReposts(
       await page
         .waitForResponse(
           (r) => /\/api\/repost\/item_list/i.test(r.url()),
-          { timeout: 15_000 },
+          { timeout: 6_000 },
         )
         .catch(() => {});
+      if (serverBlocked) {
+        captchaSuspected = true;
+      }
+
+      // Detect tab-level "Something went wrong" panel that TikTok renders
+      // when reposts are private or restricted. Skip the scroll loop entirely.
+      const tabError = await page
+        .evaluate(() => {
+          const el = document.querySelector('[data-e2e="user-post-empty-state"], [class*="DivErrorContainer"]');
+          if (el && /something went wrong/i.test(el.textContent ?? "")) return true;
+          return false;
+        })
+        .catch(() => false);
+      if (tabError && repostXhrSeen === 0) {
+        // No XHR + error UI = private/blocked tab. No point scrolling.
+        clickedTab = false;
+      }
 
       let stagnant = 0;
       for (let i = 0; i < maxScrolls; i++) {
+        if (serverBlocked) {
+          captchaSuspected = true;
+          break;
+        }
+        if (reposts.length >= maxItems) break;
+        // If no XHR fired after first scroll attempt, the tab is empty/
+        // broken — don't spin.
+        if (i >= 1 && repostXhrSeen === 0) {
+          break;
+        }
         const captchaNow = await page
           .evaluate(() => {
             return Boolean(
@@ -439,10 +475,12 @@ export async function scrapeReposts(
         }
 
         const before = reposts.length;
-        // Human-paced scroll: small steps with short pauses
-        for (let step = 0; step < 6; step++) {
-          await page.mouse.wheel(0, 600 + Math.random() * 200).catch(() => {});
-          await page.waitForTimeout(180 + Math.random() * 220);
+        // Human-paced scroll: small steps with short pauses. humanize=true on
+        // the binary already makes mouse.wheel feel real, no need for manual
+        // bezier here.
+        for (let step = 0; step < 8; step++) {
+          await page.mouse.wheel(0, 500 + Math.random() * 300).catch(() => {});
+          await page.waitForTimeout(220 + Math.random() * 280);
         }
         // Ensure last item visible to trip IntersectionObserver
         await page
@@ -458,14 +496,14 @@ export async function scrapeReposts(
         await page
           .waitForResponse(
             (r) => /\/api\/repost\/item_list/i.test(r.url()),
-            { timeout: 7_000 },
+            { timeout: 5_000 },
           )
           .catch(() => null);
-        await page.waitForTimeout(1_000);
+        await page.waitForTimeout(800);
 
         if (reposts.length === before) {
           stagnant++;
-          if (stagnant >= 3) break;
+          if (stagnant >= 4) break;
         } else {
           stagnant = 0;
         }
@@ -483,6 +521,7 @@ export async function scrapeReposts(
   }
 
   reposts.sort((a, b) => b.createTime - a.createTime);
+  if (reposts.length > maxItems) reposts.length = maxItems;
 
   const result: ScrapeResult = {
     username,

@@ -10,8 +10,14 @@ export async function GET(req: NextRequest) {
   if (!username) {
     return Response.json({ error: "username query param required" }, { status: 400 });
   }
+  const limitRaw = req.nextUrl.searchParams.get("limit");
+  const parsed = limitRaw ? parseInt(limitRaw, 10) : NaN;
+  const limit = Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, 2000) : undefined;
   try {
-    const result = await scrapeReposts(username, { maxScrolls: 4 });
+    const result = await scrapeReposts(username, {
+      maxScrolls: 60,
+      maxItems: limit,
+    });
     return Response.json(result);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";

@@ -46,6 +46,7 @@ type Aggregates = {
 };
 
 const EXAMPLES = ["khaby.lame", "mrbeast", "charlidamelio", "zachking"];
+const LIMIT_OPTIONS = [30, 60, 120, 250, 0] as const;
 
 export function RepostSearch({
   initialUsername,
@@ -53,6 +54,7 @@ export function RepostSearch({
   initialUsername?: string;
 } = {}) {
   const [input, setInput] = useState(initialUsername ?? "");
+  const [limit, setLimit] = useState<number>(60);
   const [state, setState] = useState<State>({ kind: "idle" });
   const autoRanRef = useRef(false);
 
@@ -64,10 +66,10 @@ export function RepostSearch({
     }
     setState({ kind: "loading", username });
     try {
-      const res = await fetch(
-        `/api/reposts?username=${encodeURIComponent(username)}`,
-        { cache: "no-store" },
-      );
+      const url = new URL("/api/reposts", window.location.origin);
+      url.searchParams.set("username", username);
+      if (limit > 0) url.searchParams.set("limit", String(limit));
+      const res = await fetch(url.toString(), { cache: "no-store" });
       const json = await res.json();
       if (!res.ok) {
         setState({
@@ -135,6 +137,8 @@ export function RepostSearch({
         onSubmit={onSubmit}
         loading={state.kind === "loading"}
         run={run}
+        limit={limit}
+        setLimit={setLimit}
       />
 
       <AnimatePresence mode="wait">
@@ -185,12 +189,16 @@ function SearchPanel({
   onSubmit,
   loading,
   run,
+  limit,
+  setLimit,
 }: {
   input: string;
   setInput: (s: string) => void;
   onSubmit: (e: FormEvent) => void;
   loading: boolean;
   run: (u: string) => void;
+  limit: number;
+  setLimit: (n: number) => void;
 }) {
   return (
     <div className="glass-strong rounded-3xl p-3 sm:p-4 max-w-[42rem] mx-auto">
@@ -229,24 +237,56 @@ function SearchPanel({
           )}
         </PrimaryButton>
       </form>
-      <div className="px-3 sm:px-4 pt-3 pb-1 flex flex-wrap items-center gap-x-5 gap-y-2">
-        <span className="text-[10px] uppercase tracking-[0.22em] text-white/40">
-          Try
-        </span>
-        {EXAMPLES.map((u) => (
-          <button
-            key={u}
-            type="button"
-            onClick={() => {
-              setInput(u);
-              run(u);
-            }}
-            className="text-[13px] text-white/65 hover:text-white transition-colors"
-          >
-            <span className="text-white/40">@</span>
-            {u}
-          </button>
-        ))}
+      <div className="px-3 sm:px-4 pt-4 pb-2 space-y-3">
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] uppercase tracking-[0.22em] text-white/45 w-14 flex-none">
+            Limit
+          </span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {LIMIT_OPTIONS.map((n) => {
+              const active = n === limit;
+              return (
+                <button
+                  key={n}
+                  type="button"
+                  disabled={loading}
+                  onClick={() => setLimit(n)}
+                  aria-pressed={active}
+                  className={`text-[13px] font-medium tnum px-3.5 py-1.5 rounded-lg transition-all duration-150 disabled:opacity-50 ${
+                    active
+                      ? "bg-[#25f4ee] text-black shadow-[0_0_18px_rgba(37,244,238,0.3)]"
+                      : "bg-white/[0.04] text-white/65 hover:bg-white/[0.08] hover:text-white border border-white/8"
+                  }`}
+                >
+                  {n === 0 ? "All" : n}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] uppercase tracking-[0.22em] text-white/45 w-14 flex-none">
+            Try
+          </span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {EXAMPLES.map((u) => (
+              <button
+                key={u}
+                type="button"
+                disabled={loading}
+                onClick={() => {
+                  setInput(u);
+                  run(u);
+                }}
+                className="text-[13px] px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/8 text-white/70 hover:text-white hover:bg-white/[0.08] hover:border-white/15 transition-all duration-150 disabled:opacity-50"
+              >
+                <span className="text-white/40">@</span>
+                {u}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

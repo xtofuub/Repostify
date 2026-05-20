@@ -41,6 +41,9 @@ yarn-error.log*
 dev.log
 dev.err.log
 
+# cloakbrowser persistent profile
+.cloak-profile/
+
 # misc
 lol.txt
 mitm_mcp_traffic.db
