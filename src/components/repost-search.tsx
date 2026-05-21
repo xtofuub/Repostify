@@ -431,6 +431,14 @@ function Results({
         />
       )}
 
+      <WordCloud reposts={reposts} username={username} />
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <ReceiptLink username={username} />
+        <TwinLaunchCard username={username} />
+        <AnonShareCard username={username} />
+      </div>
+
       <FilterBar
         reposts={reposts}
         keywords={keywords}
@@ -800,6 +808,220 @@ function TopCreators({
         })}
       </div>
     </div>
+  );
+}
+
+const STOPWORDS = new Set([
+  "the","a","an","and","or","but","i","you","he","she","it","we","they",
+  "to","of","in","on","at","for","with","by","from","up","out","is","are",
+  "was","were","be","been","being","have","has","had","do","does","did",
+  "this","that","these","those","what","when","where","why","how","not",
+  "no","yes","my","your","his","her","its","our","their","me","him","us",
+  "them","so","if","than","then","just","very","also","can","will","would",
+  "could","should","may","might","get","got","make","made","go","goes",
+  "going","gone","like","want","need","know","think","see","look","one",
+  "fyp","foryou","foryoupage","viral","tiktok","trending","reposted","new",
+  "watch","video","videos","check","right","best","good","love","really",
+]);
+
+function WordCloud({
+  reposts,
+  username,
+}: {
+  reposts: Repost[];
+  username: string;
+}) {
+  const cloud = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of reposts) {
+      const noTags = (r.desc ?? "")
+        .toLowerCase()
+        .replace(/#[a-z0-9_]+/g, " ")
+        .replace(/@[a-z0-9._]+/g, " ");
+      const words = noTags.match(/[a-z][a-z'']{2,18}/g) ?? [];
+      for (const w of words) {
+        if (STOPWORDS.has(w)) continue;
+        counts.set(w, (counts.get(w) ?? 0) + 1);
+      }
+    }
+    const list = [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 40);
+    if (list.length === 0) return null;
+    const max = list[0][1];
+    return list.map(([word, count]) => ({
+      word,
+      count,
+      size: 14 + Math.round(34 * Math.sqrt(count / max)),
+    }));
+  }, [reposts]);
+
+  if (!cloud || cloud.length < 4) return null;
+
+  return (
+    <div className="rounded-3xl border border-white/10 bg-white/[0.015] p-6 sm:p-8">
+      <div className="flex items-baseline justify-between mb-5 flex-wrap gap-2">
+        <p className="text-[11px] uppercase tracking-[0.22em] text-white/55">
+          Caption word cloud
+        </p>
+        <p className="text-[11px] uppercase tracking-[0.18em] text-white/40">
+          What @{username} talks about
+        </p>
+      </div>
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2 font-display leading-[1.05] tracking-tight">
+        {cloud.map(({ word, count, size }, i) => {
+          const top = i < 3;
+          const opacity = 0.4 + 0.6 * (size / 48);
+          return (
+            <span
+              key={word}
+              title={`${count} mention${count === 1 ? "" : "s"}`}
+              className={top ? "text-[#25f4ee]" : "text-white"}
+              style={{ fontSize: `${size}px`, opacity }}
+            >
+              {word}
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function FeatureCardShell({
+  glyph,
+  title,
+  hint,
+  children,
+}: {
+  glyph: string;
+  title: string;
+  hint: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/[0.02] px-5 py-5 hover:border-white/20 transition-colors">
+      <div className="flex items-center gap-3">
+        <div className="h-9 w-9 rounded-full bg-white/[0.05] border border-white/10 flex items-center justify-center">
+          <span aria-hidden className="font-display italic text-[17px] leading-none">
+            {glyph}
+          </span>
+        </div>
+        <div className="min-w-0">
+          <p className="font-display text-[16px] tracking-tight">{title}</p>
+          <p className="text-[11.5px] text-white/55 mt-0.5 leading-snug">
+            {hint}
+          </p>
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ReceiptLink({ username }: { username: string }) {
+  return (
+    <FeatureCardShell
+      glyph="R"
+      title="Print the receipt"
+      hint="Thermal-printer style PDF of every repost. Screenshot-grade drama."
+    >
+      <a
+        href={`/u/${username}/receipt`}
+        target="_blank"
+        rel="noreferrer"
+        className="group mt-auto inline-flex items-center justify-between gap-2 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 px-3 py-2 text-[12.5px] text-white/80 hover:text-white transition-colors"
+      >
+        Open receipt
+        <ArrowUpRight className="h-3.5 w-3.5" />
+      </a>
+    </FeatureCardShell>
+  );
+}
+
+function TwinLaunchCard({ username }: { username: string }) {
+  const [handleB, setHandleB] = useState("");
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    const b = handleB.replace(/^@+/, "").trim().toLowerCase();
+    if (!b || b === username.toLowerCase()) return;
+    window.location.href = `/twin/${username}/${b}`;
+  }
+
+  return (
+    <FeatureCardShell
+      glyph="∞"
+      title="Repost twin"
+      hint="Compare with another profile. Get a 0-100 taste-alignment score."
+    >
+      <form
+        onSubmit={submit}
+        className="mt-auto flex items-center gap-2 rounded-lg bg-black/30 border border-white/10 focus-within:border-white/25 px-2.5 py-1.5 transition-colors"
+      >
+        <span aria-hidden className="text-white/40 select-none text-[13px]">
+          @
+        </span>
+        <input
+          value={handleB}
+          onChange={(e) => setHandleB(e.target.value.replace(/^@+/, ""))}
+          placeholder="other handle"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          style={{
+            color: "#ffffff",
+            WebkitTextFillColor: "#ffffff",
+            colorScheme: "dark",
+            caretColor: "#25f4ee",
+          }}
+          className="flex-1 min-w-[3rem] bg-transparent text-[13px] outline-none placeholder:text-white/30"
+        />
+        <button
+          type="submit"
+          disabled={!handleB.trim()}
+          className="text-[11px] font-medium uppercase tracking-[0.16em] px-2.5 py-1 rounded-md bg-[#25f4ee] text-[#0a0a0b] disabled:opacity-40 hover:bg-[#25f4ee]/90 transition-colors"
+        >
+          Vs
+        </button>
+      </form>
+    </FeatureCardShell>
+  );
+}
+
+function AnonShareCard({ username }: { username: string }) {
+  const [copied, setCopied] = useState(false);
+  function copy() {
+    const url = `${window.location.origin}/u/${username}?anon=1`;
+    void navigator.clipboard.writeText(url).then(
+      () => {
+        setCopied(true);
+        toast.success("Anonymous link copied");
+        setTimeout(() => setCopied(false), 1800);
+      },
+      () => toast.error("Copy failed"),
+    );
+  }
+
+  return (
+    <FeatureCardShell
+      glyph="?"
+      title="Anonymous link"
+      hint="Share without the handle. Friends play guess-whose-reposts."
+    >
+      <button
+        type="button"
+        onClick={copy}
+        className="mt-auto inline-flex items-center justify-between gap-2 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 px-3 py-2 text-[12.5px] text-white/80 hover:text-white transition-colors"
+      >
+        {copied ? "Copied to clipboard" : "Copy anonymous link"}
+        {copied ? (
+          <Check className="h-3.5 w-3.5 text-[#25f4ee]" />
+        ) : (
+          <ArrowUpRight className="h-3.5 w-3.5" />
+        )}
+      </button>
+    </FeatureCardShell>
   );
 }
 
