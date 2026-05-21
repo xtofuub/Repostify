@@ -348,15 +348,20 @@ function Results({
 }) {
   const { profile, reposts, username } = data;
   const [keywords, setKeywords] = useState<string[]>([]);
+  const [draft, setDraft] = useState("");
 
+  // Live filtering: in-progress draft text also filters, so the grid updates
+  // before the user hits Enter.
   const filtered = useMemo(() => {
-    if (keywords.length === 0) return reposts;
+    const liveDraft = draft.trim().toLowerCase();
     const lc = keywords.map((k) => k.toLowerCase());
+    if (lc.length === 0 && !liveDraft) return reposts;
+    const all = liveDraft ? [...lc, liveDraft] : lc;
     return reposts.filter((r) => {
       const desc = (r.desc ?? "").toLowerCase();
-      return lc.some((k) => desc.includes(k));
+      return all.some((k) => desc.includes(k));
     });
-  }, [reposts, keywords]);
+  }, [reposts, keywords, draft]);
 
   if (reposts.length === 0) {
     return (
@@ -393,6 +398,8 @@ function Results({
         reposts={reposts}
         keywords={keywords}
         setKeywords={setKeywords}
+        draft={draft}
+        setDraft={setDraft}
         matchedCount={filtered.length}
       />
 
@@ -405,14 +412,17 @@ function FilterBar({
   reposts,
   keywords,
   setKeywords,
+  draft,
+  setDraft,
   matchedCount,
 }: {
   reposts: Repost[];
   keywords: string[];
   setKeywords: (k: string[]) => void;
+  draft: string;
+  setDraft: (s: string) => void;
   matchedCount: number;
 }) {
-  const [draft, setDraft] = useState("");
 
   // Extract hashtags from captions, rank by frequency. Skip ones already on
   // the active filter list.
@@ -482,6 +492,7 @@ function FilterBar({
         }}
         className="flex items-center gap-2 flex-wrap rounded-xl bg-black/30 border border-white/10 focus-within:border-white/25 px-3 py-2 transition-colors"
       >
+        <Search className="h-3.5 w-3.5 text-white/35 flex-none" />
         {keywords.map((k) => (
           <button
             key={k}
@@ -495,13 +506,10 @@ function FilterBar({
             <X className="h-3 w-3 ml-0.5 opacity-70 group-hover:opacity-100" />
           </button>
         ))}
-        <span className="text-white/40 select-none">#</span>
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder={
-            keywords.length === 0 ? "type a word, hit enter" : "add another"
-          }
+          placeholder="search captions (fyp, lol, edit...)"
           autoCapitalize="off"
           autoCorrect="off"
           spellCheck={false}

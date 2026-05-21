@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   X,
@@ -11,8 +11,6 @@ import {
   ExternalLink,
   ChevronUp,
   ChevronDown,
-  Volume2,
-  VolumeX,
 } from "lucide-react";
 import type { Repost } from "@/lib/tiktok";
 import { formatCount, formatRelativeTime } from "@/lib/format";
@@ -37,7 +35,6 @@ export function RepostPlayer({
   const repost = open ? reposts[index] : null;
   const wheelLockRef = useRef(0);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [muted, setMuted] = useState(true);
 
   // TikTok iframe player exposes a postMessage API. Spec:
   // https://developers.tiktok.com/doc/embed-player. Posting {type:"unMute"}
@@ -61,9 +58,7 @@ export function RepostPlayer({
       const t = (data as { type?: string }).type;
       if (t === "onPlayerReady" || t === "onPlayerReadyForUnMute" || t === "playerReady") {
         postToPlayer("unMute");
-        setMuted(false);
       }
-      if (t === "onMute") setMuted(Boolean((data as { value?: boolean }).value));
     };
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
@@ -79,11 +74,6 @@ export function RepostPlayer({
     });
     return () => ids.forEach(clearTimeout);
   }, [repost?.id, postToPlayer]);
-
-  const toggleMute = useCallback(() => {
-    postToPlayer(muted ? "unMute" : "mute");
-    setMuted((m) => !m);
-  }, [muted, postToPlayer]);
 
   // Prefetch the iframe URL of the previous + next reposts. Browser warms
   // DNS, TLS, and (when allowed) the player HTML, so scroll-nav is faster.
@@ -214,18 +204,6 @@ export function RepostPlayer({
                     className="h-full w-full border-0"
                     loading="eager"
                   />
-                  <button
-                    type="button"
-                    onClick={toggleMute}
-                    aria-label={muted ? "Unmute" : "Mute"}
-                    className="absolute bottom-3 right-3 h-8 w-8 rounded-full bg-black/60 border border-white/15 backdrop-blur-md text-white/85 hover:text-white hover:bg-black/80 transition-colors flex items-center justify-center"
-                  >
-                    {muted ? (
-                      <VolumeX className="h-3.5 w-3.5" />
-                    ) : (
-                      <Volume2 className="h-3.5 w-3.5" />
-                    )}
-                  </button>
                 </>
               ) : (
                 <div className="flex flex-col items-center text-white/55 gap-2">
