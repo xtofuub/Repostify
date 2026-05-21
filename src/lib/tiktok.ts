@@ -208,36 +208,50 @@ export async function scrapeReposts(
   let repostXhrSeen = 0;
 
   let serverBlocked = false;
+  // Capture first XHR URL — we use it as a template for direct cursor-based
+  // pagination via page.evaluate(fetch), which bypasses scroll wait entirely.
+  let firstXhrUrl: string | null = null;
+  let nextCursor: string | number | null = null;
+
+  function ingest(json: {
+    itemList?: TikTokItem[];
+    hasMore?: boolean;
+    statusCode?: number;
+    cursor?: string | number;
+    maxCursor?: string | number;
+  }): { newCount: number } {
+    if (json.statusCode && json.statusCode !== 0) {
+      serverBlocked = true;
+    }
+    let added = 0;
+    if (Array.isArray(json.itemList)) {
+      for (const raw of json.itemList) {
+        const norm = normalizeItem(raw);
+        if (norm && !seen.has(norm.id)) {
+          seen.add(norm.id);
+          reposts.push(norm);
+          added++;
+        }
+      }
+    }
+    if (typeof json.hasMore === "boolean") hasMore = json.hasMore;
+    const c = json.maxCursor ?? json.cursor;
+    if (c !== undefined && c !== null) nextCursor = c;
+    return { newCount: added };
+  }
+
   page.on("response", async (res) => {
     const url = res.url();
     if (!/\/api\/repost\/item_list/i.test(url)) return;
     repostXhrSeen++;
-    // Soft-block: TikTok returns non-2xx (often 403/418/451) for sessions it
-    // distrusts. Bail out — no point spinning.
+    if (!firstXhrUrl) firstXhrUrl = url;
     if (res.status() >= 400) {
       serverBlocked = true;
       return;
     }
     try {
-      const json = (await res.json()) as {
-        itemList?: TikTokItem[];
-        hasMore?: boolean;
-        statusCode?: number;
-      };
-      // statusCode != 0 in body also signals server-side rejection
-      if (json.statusCode && json.statusCode !== 0) {
-        serverBlocked = true;
-      }
-      if (Array.isArray(json.itemList)) {
-        for (const raw of json.itemList) {
-          const norm = normalizeItem(raw);
-          if (norm && !seen.has(norm.id)) {
-            seen.add(norm.id);
-            reposts.push(norm);
-          }
-        }
-      }
-      if (typeof json.hasMore === "boolean") hasMore = json.hasMore;
+      const json = await res.json();
+      ingest(json);
     } catch {}
   });
 
@@ -464,6 +478,22 @@ export async function scrapeReposts(
         clickedTab = false;
       }
 
+      // Wait for the first XHR captured by response handler (which also
+      // records firstXhrUrl). We don't scroll — the tab click is enough to
+      // trigger the first server call. If we didn't capture, bail.
+      if (!firstXhrUrl) {
+        // Give the response handler a brief grace window.
+        for (let i = 0; i < 8; i++) {
+          if (firstXhrUrl) break;
+          await page.waitForTimeout(250);
+        }
+      }
+
+      // Direct cursor pagination: avoids scroll, IntersectionObserver,
+      // mouse-wheel pacing. Each iteration is one HTTP roundtrip to TikTok.
+      // The first XHR's URL already carries msToken / X-Bogus / _signature
+      // computed by TikTok's webmssdk; we just swap the cursor param. The
+      // page's fetch interceptor refreshes signatures naturally.
       let stagnant = 0;
       for (let i = 0; i < maxScrolls; i++) {
         if (serverBlocked) {
@@ -471,60 +501,61 @@ export async function scrapeReposts(
           break;
         }
         if (reposts.length >= maxItems) break;
-        // If no XHR fired after first scroll attempt, the tab is empty/
-        // broken — don't spin.
-        if (i >= 1 && repostXhrSeen === 0) {
-          break;
-        }
-        const captchaNow = await page
-          .evaluate(() => {
-            return Boolean(
-              document.querySelector(
-                '#captcha-verify-container, .captcha_verify_container, [class*="captcha-verify"]',
-              ),
-            );
-          })
-          .catch(() => false);
-        if (captchaNow) {
-          captchaSuspected = true;
+        if (!hasMore) break;
+        if (!firstXhrUrl) break;
+        if (nextCursor === null || nextCursor === undefined) break;
+
+        // Build next URL with updated cursor. Keep msToken stale-but-valid
+        // (TikTok generally accepts within session lifetime).
+        let nextUrl: string;
+        try {
+          const u = new URL(firstXhrUrl);
+          u.searchParams.set("cursor", String(nextCursor));
+          // Some TikTok endpoints use maxCursor; set both to be safe.
+          if (u.searchParams.has("maxCursor")) {
+            u.searchParams.set("maxCursor", String(nextCursor));
+          }
+          nextUrl = u.toString();
+        } catch {
           break;
         }
 
         const before = reposts.length;
-        // Wheel kicks (4 small steps) + scrollIntoView. Empirically TikTok
-        // needs multiple scroll events spread over ~600ms; one big jump makes
-        // its server cut off pagination early.
-        for (let step = 0; step < 4; step++) {
-          await page.mouse.wheel(0, 600).catch(() => {});
-          await page.waitForTimeout(120);
-        }
-        await page
-          .evaluate(() => {
-            const items = document.querySelectorAll<HTMLElement>(
-              'div[data-e2e="user-post-item"]',
-            );
-            const last = items[items.length - 1];
-            if (last) last.scrollIntoView({ block: "end" });
-          })
-          .catch(() => {});
-
-        await page
-          .waitForResponse(
-            (r) => /\/api\/repost\/item_list/i.test(r.url()),
-            { timeout: 5_000 },
-          )
+        // Fire fetch from inside page context so TikTok's fetch interceptor
+        // (signing layer) augments the request automatically.
+        const result = await page
+          .evaluate(async (url: string) => {
+            try {
+              const r = await fetch(url, { credentials: "include" });
+              const body = await r.json();
+              return { status: r.status, body } as const;
+            } catch (e) {
+              return {
+                status: -1,
+                body: null,
+                err: (e as Error)?.message ?? "fetch error",
+              } as const;
+            }
+          }, nextUrl)
           .catch(() => null);
-        // 250ms is enough for the response handler (registered above) to
-        // drain itemList into reposts[] before we measure progress.
-        await page.waitForTimeout(250);
+
+        if (!result) break;
+        repostXhrSeen++;
+        if (result.status >= 400) {
+          serverBlocked = true;
+          captchaSuspected = true;
+          break;
+        }
+        if (result.body && typeof result.body === "object") {
+          ingest(result.body as Parameters<typeof ingest>[0]);
+        }
 
         if (reposts.length === before) {
           stagnant++;
-          if (stagnant >= 4) break;
+          if (stagnant >= 2) break;
         } else {
           stagnant = 0;
         }
-        if (!hasMore) break;
       }
     }
 
