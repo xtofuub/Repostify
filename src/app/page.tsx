@@ -12,32 +12,24 @@ import { SITE_NAME, SITE_URL } from "@/lib/seo";
 
 const FAQ_ITEMS = [
   {
-    q: "Will they know I looked?",
-    a: "No. We open the profile as an anonymous visitor, the same way it loads when anyone googles their handle. TikTok doesn't notify accounts that someone viewed their reposts, viewed their profile, or watched a video. There's no view history on the account-owner side, no \"who viewed your profile\" feature, nothing.",
+    q: "Why do I only get around thirty reposts?",
+    a: "TikTok throws a slider captcha the moment anonymous traffic asks for a second page of reposts. Repostify reads everything before that gate and then stops, with no solver and no proxy roulette.",
   },
   {
-    q: "Can I check my ex / crush / a friend's reposts?",
-    a: "Yes, if their reposts tab is public. Paste their handle and hit Analyze. You'll see every video they pushed to their followers, the original creator each video came from, and how often that creator gets amplified. Nothing logs in to your account or theirs.",
-  },
-  {
-    q: "Can I check my own reposts?",
-    a: "Yes. Paste your handle and you'll see exactly what a stranger sees when they land on your profile and tap the reposts tab. Useful for auditing what you're broadcasting before someone you know finds it.",
+    q: "Can I play the videos here?",
+    a: "Yes. Click any cover in the grid. The video opens in a player overlay. Press ESC or click outside to close.",
   },
   {
     q: "Do I need a TikTok account?",
-    a: "No. The viewer reads the same public page Google indexes. No login on your side, no API key, no extension to install.",
+    a: "No. The scraper walks the public profile page like any visitor would. Nothing is logged in, nothing is stored.",
   },
   {
-    q: "Why is the result empty?",
-    a: "TikTok lets each user hide their reposts tab from public view. If a profile flipped that switch, the page is empty for everyone, including us. Try another handle.",
-  },
-  {
-    q: "Can they see I'm using a third-party viewer?",
-    a: "They can't. The request leaves from our server, not your device. From TikTok's side it looks like a generic anonymous page load on the profile, nothing else.",
+    q: "The result was empty. What happened?",
+    a: "Most profiles keep their reposts tab private. That is on the creator, not us. Try a public account like @khaby.lame or @mrbeast.",
   },
   {
     q: "Is this affiliated with TikTok?",
-    a: "No. Repostify is an independent tool that reads the same public page anyone can. Not affiliated with or endorsed by TikTok or ByteDance.",
+    a: "No. Repostify is an independent tool that reads the same public page you can. Not affiliated with or endorsed by TikTok.",
   },
 ];
 
@@ -140,47 +132,27 @@ function Hero() {
     <header className="relative pt-12 pb-16 md:pt-16 md:pb-20">
       <div className="aurora absolute inset-x-0 top-0 h-[640px] -z-[1]" />
       <div className="max-w-[72rem] mx-auto px-6">
-        <div className="text-center max-w-[46rem] mx-auto">
+        <div className="text-center max-w-[44rem] mx-auto">
           <SectionLabel>TikTok repost viewer</SectionLabel>
-          <h1 className="mt-6 font-display text-[clamp(2.4rem,6.2vw,5.25rem)] leading-[0.95] tracking-[-0.02em]">
-            See what{" "}
-            <span className="italic text-[#25f4ee]">they</span>{" "}
-            repost.
+          <h1 className="mt-6 font-display text-[clamp(2.4rem,6vw,5rem)] leading-[0.95] tracking-[-0.02em]">
+            Every repost on a{" "}
+            <span className="italic text-[#25f4ee]">profile</span>,
             <br />
-            They never know you looked.
+            playable here.
           </h1>
-          <p className="mt-6 max-w-[50ch] mx-auto text-[15px] leading-[1.65] text-white/70">
-            Paste any public TikTok handle. We open the profile as anonymous
-            traffic, walk the reposts tab, and pull every video they amplified.
-            No TikTok account on your end. No notification on theirs.
+          <p className="mt-5 max-w-[44ch] mx-auto text-[14.5px] leading-[1.65] text-white/65">
+            Paste a TikTok handle. We open the public profile, click the
+            reposts tab, and load every repost into a clean grid you can play
+            in-browser.
           </p>
-
-          {/* Three quiet promises — explicit because the watcher is checking
-              for these before they paste. */}
-          <ul className="mt-7 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[12px] text-white/55">
-            <li className="flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#25f4ee]" />
-              No login, no signup
-            </li>
-            <li className="flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#25f4ee]" />
-              They don&apos;t get notified
-            </li>
-            <li className="flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#25f4ee]" />
-              Works on any public profile
-            </li>
-          </ul>
         </div>
-
         <div className="mt-9">
           <RepostSearch />
         </div>
-
-        <p className="mt-6 max-w-[42rem] mx-auto text-center text-[12px] leading-[1.6] text-white/45">
-          If the result lands empty, the profile&apos;s reposts tab is set to
-          private. Try another handle, or check your own to see what strangers
-          see when they land on yours.
+        <p className="mt-6 max-w-[44rem] mx-auto text-center text-[12px] leading-[1.6] text-white/45">
+          Public profiles only. No login. TikTok shows a captcha after the
+          first batch, so each session captures roughly thirty reposts. If a
+          result lands empty, the profile&apos;s reposts tab is private.
         </p>
       </div>
     </header>
@@ -194,40 +166,27 @@ function FAQ() {
       <div className="max-w-[72rem] mx-auto px-6">
         <div className="grid grid-cols-12 gap-x-6 gap-y-8 items-start">
           <div className="col-span-12 md:col-span-4">
-            <SectionLabel>The questions you don&apos;t ask out loud</SectionLabel>
+            <SectionLabel>FAQ</SectionLabel>
             <h2 className="mt-6 font-display text-[clamp(2rem,4vw,3.25rem)] leading-[0.95] tracking-[-0.015em]">
-              Look first.{" "}
-              <span className="italic text-white/55">Paste second.</span>
+              Things people ask{" "}
+              <span className="italic text-white/55">before paste.</span>
             </h2>
-            <p className="mt-5 text-[14px] leading-[1.65] text-white/55 max-w-[42ch]">
-              The honest answers about who sees what, before you put a handle
-              in the search bar.
-            </p>
           </div>
-          <div className="col-span-12 md:col-span-8 space-y-2.5">
-            {items.map((it, i) => (
+          <div className="col-span-12 md:col-span-8 space-y-3">
+            {items.map((it) => (
               <details
                 key={it.q}
-                className="group rounded-2xl border border-white/8 bg-white/[0.02] open:bg-white/[0.04] open:border-white/20 transition-colors"
+                className="rounded-xl border border-white/10 bg-white/[0.015] px-5 py-4 group open:bg-white/[0.03] open:border-white/20 transition-colors"
               >
-                <summary className="flex items-center cursor-pointer list-none gap-4 px-5 py-4 sm:px-6">
-                  <span className="text-[10.5px] tnum text-white/35 w-6 tracking-[0.18em]">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  <span className="text-[15px] font-medium flex-1">
-                    {it.q}
-                  </span>
-                  <span className="text-white/50 group-open:rotate-45 transition-transform duration-300 text-2xl leading-none flex-none">
+                <summary className="flex items-center justify-between cursor-pointer list-none gap-4">
+                  <span className="text-[15px] font-medium">{it.q}</span>
+                  <span className="text-white/50 group-open:rotate-45 transition-transform text-xl leading-none flex-none">
                     +
                   </span>
                 </summary>
-                <div className="px-5 sm:px-6 pb-5">
-                  <div className="pl-10">
-                    <p className="text-[14px] leading-[1.7] text-white/75 max-w-[68ch]">
-                      {it.a}
-                    </p>
-                  </div>
-                </div>
+                <p className="mt-3 text-[14px] leading-[1.65] text-white/70 max-w-[68ch]">
+                  {it.a}
+                </p>
               </details>
             ))}
           </div>
@@ -243,16 +202,12 @@ function FinalCTA() {
       <div className="max-w-[72rem] mx-auto px-6">
         <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.02] px-8 py-16 md:px-16 md:py-20 text-center">
           <div className="aurora absolute inset-0 -z-[1]" />
-          <SectionLabel>Got a handle in mind?</SectionLabel>
+          <SectionLabel>Try another handle</SectionLabel>
           <h2 className="mt-5 font-display text-[clamp(2.2rem,5.5vw,4.5rem)] leading-[0.95] tracking-[-0.025em]">
-            Paste it.{" "}
-            <span className="italic text-[#25f4ee]">Nobody finds out.</span>
+            One more profile.{" "}
+            <span className="italic text-[#25f4ee]">One more reel.</span>
           </h2>
-          <p className="mt-6 max-w-[44ch] mx-auto text-[14px] leading-[1.65] text-white/65">
-            One field. One click. Every repost on their profile, in your
-            browser, in seconds.
-          </p>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+          <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
             <a href="#top">
               <PrimaryButton size="lg">
                 Back to search

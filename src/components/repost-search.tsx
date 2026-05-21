@@ -237,49 +237,36 @@ function SearchPanel({
           )}
         </PrimaryButton>
       </form>
-      <div className="px-3 sm:px-4 pt-4 pb-2 space-y-3.5">
-        {/* Limit: segmented control. Selected gets a cyan underline ribbon
-            instead of a full cyan fill — the brand color stays an accent
-            (≤10% of surface) per the Restrained color strategy. */}
+      <div className="px-3 sm:px-4 pt-4 pb-2 space-y-3">
         <div className="flex items-center gap-3">
-          <span className="text-[10px] uppercase tracking-[0.22em] text-white/45 w-12 flex-none">
+          <span className="text-[10px] uppercase tracking-[0.22em] text-white/45 w-14 flex-none">
             Limit
           </span>
-          <div
-            role="radiogroup"
-            aria-label="Reposts fetch limit"
-            className="inline-flex items-stretch rounded-xl bg-white/[0.04] border border-white/10 overflow-hidden divide-x divide-white/8 p-0.5"
-          >
+          <div className="flex items-center gap-1.5 flex-wrap">
             {LIMIT_OPTIONS.map((n) => {
               const active = n === limit;
               return (
                 <button
                   key={n}
                   type="button"
-                  role="radio"
-                  aria-checked={active}
                   disabled={loading}
                   onClick={() => setLimit(n)}
-                  className={`relative text-[12.5px] font-medium tnum px-3.5 py-1.5 transition-colors duration-150 disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-[#25f4ee]/50 ${
+                  aria-pressed={active}
+                  className={`text-[13px] font-medium tnum px-3.5 py-1.5 rounded-lg transition-all duration-150 disabled:opacity-50 ${
                     active
-                      ? "bg-white/[0.06] text-white"
-                      : "text-white/55 hover:text-white"
+                      ? "bg-[#25f4ee] text-black shadow-[0_0_18px_rgba(37,244,238,0.3)]"
+                      : "bg-white/[0.04] text-white/65 hover:bg-white/[0.08] hover:text-white border border-white/8"
                   }`}
                 >
                   {n === 0 ? "All" : n}
-                  {active && (
-                    <span className="absolute left-2.5 right-2.5 -bottom-px h-[2px] bg-[#25f4ee] rounded-full" />
-                  )}
                 </button>
               );
             })}
           </div>
         </div>
 
-        {/* Examples: lighter visual weight than the search field, but more
-            obviously tappable than plain text links. */}
         <div className="flex items-center gap-3">
-          <span className="text-[10px] uppercase tracking-[0.22em] text-white/45 w-12 flex-none">
+          <span className="text-[10px] uppercase tracking-[0.22em] text-white/45 w-14 flex-none">
             Try
           </span>
           <div className="flex items-center gap-1.5 flex-wrap">
@@ -292,11 +279,9 @@ function SearchPanel({
                   setInput(u);
                   run(u);
                 }}
-                className="group inline-flex items-center gap-0.5 text-[12.5px] px-2.5 py-1.5 rounded-md text-white/65 hover:text-white hover:bg-white/[0.05] transition-colors disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-[#25f4ee]/50"
+                className="text-[13px] px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/8 text-white/70 hover:text-white hover:bg-white/[0.08] hover:border-white/15 transition-all duration-150 disabled:opacity-50"
               >
-                <span className="text-white/35 group-hover:text-[#25f4ee] transition-colors">
-                  @
-                </span>
+                <span className="text-white/40">@</span>
                 {u}
               </button>
             ))}
