@@ -454,17 +454,24 @@ function FilterBar({
           </span>
         </div>
         {keywords.length > 0 && (
-          <span className="text-[11.5px] text-white/45">
-            <span className="text-white tnum">{matchedCount}</span> of{" "}
-            <span className="tnum">{reposts.length}</span> match
+          <div className="flex items-center gap-3 text-[11.5px] text-white/45">
+            <span>
+              <span className="text-white tnum">{matchedCount}</span>{" "}
+              <span className="text-white/40">of</span>{" "}
+              <span className="tnum text-white/75">{reposts.length}</span>{" "}
+              match
+            </span>
+            <span aria-hidden className="text-white/15">
+              ·
+            </span>
             <button
               type="button"
               onClick={() => setKeywords([])}
-              className="ml-3 text-[11px] uppercase tracking-[0.18em] text-white/45 hover:text-white transition-colors"
+              className="text-[11px] uppercase tracking-[0.18em] text-white/45 hover:text-white transition-colors"
             >
               Clear
             </button>
-          </span>
+          </div>
         )}
       </div>
 
@@ -473,21 +480,22 @@ function FilterBar({
           e.preventDefault();
           add(draft);
         }}
-        className="flex items-center gap-2 flex-wrap rounded-xl bg-black/30 border border-white/10 focus-within:border-white/25 px-3 py-2"
+        className="flex items-center gap-2 flex-wrap rounded-xl bg-black/30 border border-white/10 focus-within:border-white/25 px-3 py-2 transition-colors"
       >
         {keywords.map((k) => (
           <button
             key={k}
             type="button"
             onClick={() => remove(k)}
-            className="group inline-flex items-center gap-1 text-[12.5px] font-medium tnum bg-[#25f4ee]/15 border border-[#25f4ee]/35 text-[#25f4ee] rounded-full pl-2 pr-1.5 py-0.5 transition-colors hover:bg-[#25f4ee]/25"
+            aria-label={`Remove filter ${k}`}
+            className="group inline-flex items-center gap-1 text-[12.5px] font-medium tnum bg-[#25f4ee] text-[#0a0a0b] rounded-full pl-2 pr-1 py-0.5 transition-colors hover:bg-[#25f4ee]/90"
           >
-            <span className="text-[#25f4ee]/55">#</span>
+            <span className="text-black/45">#</span>
             {k}
-            <X className="h-3 w-3 ml-0.5 opacity-65 group-hover:opacity-100" />
+            <X className="h-3 w-3 ml-0.5 opacity-70 group-hover:opacity-100" />
           </button>
         ))}
-        <span className="text-white/30 select-none">#</span>
+        <span className="text-white/40 select-none">#</span>
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -503,7 +511,7 @@ function FilterBar({
 
       {suggestions.length > 0 && (
         <div className="mt-3 flex items-center gap-2 flex-wrap">
-          <span className="text-[10px] uppercase tracking-[0.18em] text-white/35">
+          <span className="text-[10px] uppercase tracking-[0.18em] text-white/35 mr-1">
             Top tags
           </span>
           {suggestions
@@ -514,13 +522,16 @@ function FilterBar({
                 key={s.kw}
                 type="button"
                 onClick={() => add(s.kw)}
-                className="group inline-flex items-baseline gap-1 text-[12px] text-white/65 hover:text-white px-2 py-1 rounded-full bg-white/[0.025] border border-white/8 hover:border-white/25 transition-colors"
+                className="group inline-flex items-center gap-1.5 text-[12px] text-white/65 hover:text-white px-2.5 py-1 rounded-full bg-white/[0.025] border border-white/10 hover:border-white/25 hover:bg-white/[0.05] transition-colors"
               >
-                <span className="text-white/30 group-hover:text-[#25f4ee] transition-colors">
+                <span className="text-white/40 group-hover:text-[#25f4ee] transition-colors">
                   #
                 </span>
-                {s.kw}
-                <span className="ml-0.5 text-white/30 text-[10.5px] tnum">
+                <span>{s.kw}</span>
+                <span aria-hidden className="text-white/15">
+                  ·
+                </span>
+                <span className="text-[10.5px] tnum text-white/40">
                   {s.count}
                 </span>
               </button>
