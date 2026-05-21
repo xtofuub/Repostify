@@ -212,7 +212,7 @@ function SearchPanel({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="paste a tiktok handle"
-          autoCapitalize="off"
+          autoCapitalize="none"
           autoCorrect="off"
           spellCheck={false}
           disabled={loading}
@@ -510,7 +510,7 @@ function FilterBar({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           placeholder="search captions (fyp, lol, edit...)"
-          autoCapitalize="off"
+          autoCapitalize="none"
           autoCorrect="off"
           spellCheck={false}
           className="flex-1 min-w-[8rem] bg-transparent text-[14px] text-white placeholder:text-white/30 outline-none"
