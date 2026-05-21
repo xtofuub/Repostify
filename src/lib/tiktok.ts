@@ -156,6 +156,10 @@ async function getBrowser(): Promise<Browser> {
   }
 }
 
+// Pre-warm: fire browser launch when this module loads so first request
+// doesn't pay ~2-4s cold-start cost.
+getBrowser().catch(() => {});
+
 async function dumpDebug(name: string, html: string, png: Buffer) {
   if (!DEBUG) return;
   const dir = join(process.cwd(), ".debug");
