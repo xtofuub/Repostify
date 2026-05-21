@@ -8,7 +8,7 @@ import {
   SectionLabel,
 } from "@/components/brand";
 import { RepostSearch } from "@/components/repost-search";
-import { canonical, SITE_NAME } from "@/lib/seo";
+import { canonical, POPULAR_HANDLES, SITE_NAME } from "@/lib/seo";
 
 const BG =
   "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260508_064122_c4750c0e-7476-4b44-94a2-a85a65c63bf2.mp4";
@@ -29,11 +29,20 @@ export async function generateMetadata({
   if (!HANDLE_RE.test(username)) {
     return { title: "Invalid handle", robots: { index: false } };
   }
-  const title = `@${username} TikTok reposts`;
-  const description = `View every public repost on @${username}'s TikTok profile. Plays inline, stats per video, top creators amplified.`;
+  const title = `See @${username}'s TikTok reposts`;
+  const description = `View every public repost on @${username}'s TikTok profile. Free TikTok repost viewer — no login, no signup. Plays each video inline with stats per repost and top amplified creators.`;
   return {
     title,
     description,
+    keywords: [
+      `${username} tiktok reposts`,
+      `${username} repost tab`,
+      `see ${username} reposts`,
+      `${username} tiktok analyzer`,
+      "tiktok repost viewer",
+      "see tiktok reposts",
+      "tiktok reposts list",
+    ],
     alternates: { canonical: canonical(`/u/${username}`) },
     openGraph: {
       title: `${title} · ${SITE_NAME}`,
@@ -127,39 +136,91 @@ export default async function HandlePage({
           </header>
 
           <section className="py-12 md:py-16 border-t border-white/8">
-            <div className="max-w-[60rem] mx-auto px-6 text-[14px] leading-[1.7] text-white/65">
+            <div className="max-w-[60rem] mx-auto px-6 text-[14px] leading-[1.7] text-white/65 space-y-4">
               <h2 className="font-display text-[clamp(1.4rem,2.8vw,2rem)] text-white tracking-[-0.015em]">
-                About this page
+                See @{username}&apos;s TikTok reposts
               </h2>
-              <p className="mt-4">
-                This page lists every repost on{" "}
+              <p>
+                This page shows every public repost on{" "}
                 <span className="text-white">
                   @{username}&apos;s
                 </span>{" "}
-                public TikTok profile that an anonymous visitor can see in
-                a single session. The reposts feed is a curated playlist:
-                videos the account chose to amplify to its own followers,
-                rather than the account&apos;s own uploads.
+                TikTok profile that an anonymous visitor can see in a single
+                session. The reposts feed is a curated playlist: videos the
+                account chose to amplify to its followers, rather than its own
+                uploads. The list above is sorted by recency.
               </p>
-              <p className="mt-3">
-                If the result above is empty, the profile&apos;s reposts
-                tab is set to private. TikTok lets each user hide the tab
-                from public view, and a lot of creators do. Try another
-                handle from the{" "}
-                <Link
-                  href="/"
-                  className="underline underline-offset-4 hover:text-white"
-                >
-                  home page
-                </Link>{" "}
-                or read the{" "}
+              <p>
+                Each repost card shows the original creator&apos;s handle,
+                caption, duration, view count, likes, comments, and shares.
+                Click any cover to play the video in an embedded TikTok
+                player, then use the arrow keys, scroll wheel, or buttons to
+                jump to the next or previous repost.
+              </p>
+              <h3 className="font-display text-[clamp(1.1rem,2vw,1.4rem)] text-white pt-4">
+                Why is @{username}&apos;s reposts tab empty?
+              </h3>
+              <p>
+                If the grid above is empty, one of three things is happening.
+                Either the account hasn&apos;t reposted anything yet, or
+                they&apos;ve flipped their reposts tab to private (a TikTok
+                privacy setting hidden three menus deep), or TikTok served a
+                generic &quot;Something went wrong&quot; panel for the tab.
+                Switching accounts or trying again later usually clears the
+                last case.
+              </p>
+              <h3 className="font-display text-[clamp(1.1rem,2vw,1.4rem)] text-white pt-4">
+                How is this different from logging into TikTok?
+              </h3>
+              <p>
+                Nothing on this page requires a TikTok account. We open the
+                public profile, click the Reposts tab, and read the data that
+                TikTok already shows to anonymous visitors. No login, no API
+                key, no cookies stored. Read the{" "}
                 <Link
                   href="/guide"
                   className="underline underline-offset-4 hover:text-white"
                 >
-                  guide
+                  full guide
                 </Link>{" "}
-                on how the reposts tab works.
+                for the technical detail.
+              </p>
+            </div>
+          </section>
+
+          <section className="py-10 md:py-14 border-t border-white/8">
+            <div className="max-w-[78rem] mx-auto px-6">
+              <h2 className="font-display text-[clamp(1.4rem,2.8vw,2rem)] text-white tracking-[-0.015em]">
+                More TikTok profiles to explore
+              </h2>
+              <p className="mt-3 text-[14px] text-white/55 max-w-[60ch]">
+                Popular creators whose reposts tab is public. Each link runs a
+                fresh scrape on that handle.
+              </p>
+              <ul className="mt-6 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+                {POPULAR_HANDLES.filter((h) => h !== username)
+                  .slice(0, 20)
+                  .map((h) => (
+                    <li key={h}>
+                      <Link
+                        href={`/u/${h}`}
+                        className="block text-[13px] text-white/70 hover:text-white px-3 py-2 rounded-lg bg-white/[0.03] border border-white/8 hover:bg-white/[0.07] hover:border-white/15 transition-colors truncate"
+                      >
+                        <span className="text-white/40">@</span>
+                        {h}
+                      </Link>
+                    </li>
+                  ))}
+              </ul>
+              <p className="mt-6 text-[12px] text-white/45">
+                Searching for someone else?{" "}
+                <Link
+                  href="/"
+                  className="underline underline-offset-4 hover:text-white"
+                >
+                  Enter any TikTok handle on the home page
+                </Link>
+                .
               </p>
             </div>
           </section>

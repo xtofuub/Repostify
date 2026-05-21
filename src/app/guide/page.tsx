@@ -37,6 +37,54 @@ function ArticleJsonLd() {
     author: { "@type": "Organization", name: SITE_NAME },
     publisher: { "@type": "Organization", name: SITE_NAME },
     mainEntityOfPage: canonical("/guide"),
+    datePublished: "2026-01-01",
+    dateModified: new Date().toISOString().slice(0, 10),
+  };
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
+    />
+  );
+}
+
+function HowToJsonLd() {
+  const data = {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    name: "How to see someone's TikTok reposts",
+    description:
+      "View every public repost on a TikTok profile in seconds, with no login, no signup, and no API key.",
+    totalTime: "PT30S",
+    supply: [{ "@type": "HowToSupply", name: "A public TikTok username" }],
+    tool: [{ "@type": "HowToTool", name: "Repostify" }],
+    step: [
+      {
+        "@type": "HowToStep",
+        position: 1,
+        name: "Open Repostify",
+        text: "Go to repostify.app in any browser. No account needed.",
+        url: canonical("/"),
+      },
+      {
+        "@type": "HowToStep",
+        position: 2,
+        name: "Paste the TikTok username",
+        text: "Type or paste the handle of the profile you want to view (without the @ symbol).",
+      },
+      {
+        "@type": "HowToStep",
+        position: 3,
+        name: "Pick a fetch limit",
+        text: "Choose 30, 60, 120, 250, or All. Smaller limits return faster.",
+      },
+      {
+        "@type": "HowToStep",
+        position: 4,
+        name: "Hit Analyze",
+        text: "The scraper opens the profile, clicks the Reposts tab, and returns every visible repost as a playable grid.",
+      },
+    ],
   };
   return (
     <script
@@ -50,6 +98,7 @@ export default function GuidePage() {
   return (
     <div className="relative min-h-screen overflow-x-hidden">
       <ArticleJsonLd />
+      <HowToJsonLd />
       <BackgroundVideo src={BG} />
       <GuideLines />
       <div className="relative z-10">

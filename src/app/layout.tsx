@@ -3,6 +3,7 @@ import { Inter, Instrument_Serif } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import {
   SITE_DESCRIPTION,
+  SITE_KEYWORDS,
   SITE_NAME,
   SITE_TAGLINE,
   SITE_URL,
@@ -32,17 +33,7 @@ export const metadata: Metadata = {
   },
   description: SITE_DESCRIPTION,
   applicationName: SITE_NAME,
-  keywords: [
-    "tiktok reposts",
-    "tiktok repost viewer",
-    "tiktok repost analyzer",
-    "see tiktok reposts",
-    "what someone reposts on tiktok",
-    "view tiktok shared videos",
-    "tiktok profile reposts",
-    "tiktok shared posts viewer",
-    "tiktok repost finder",
-  ],
+  keywords: SITE_KEYWORDS,
   authors: [{ name: SITE_NAME }],
   creator: SITE_NAME,
   alternates: {

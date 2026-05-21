@@ -514,7 +514,9 @@ export async function scrapeReposts(
             { timeout: 5_000 },
           )
           .catch(() => null);
-        await page.waitForTimeout(500);
+        // 250ms is enough for the response handler (registered above) to
+        // drain itemList into reposts[] before we measure progress.
+        await page.waitForTimeout(250);
 
         if (reposts.length === before) {
           stagnant++;
