@@ -509,11 +509,12 @@ function FilterBar({
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder="search captions (fyp, lol, edit...)"
+          placeholder={keywords.length === 0 ? "search captions" : ""}
           autoCapitalize="none"
           autoCorrect="off"
           spellCheck={false}
-          className="flex-1 min-w-[8rem] bg-transparent text-[14px] text-white placeholder:text-white/30 outline-none"
+          style={{ color: "#ffffff", WebkitTextFillColor: "#ffffff" }}
+          className="flex-1 min-w-[6rem] bg-transparent text-[14px] text-white placeholder:text-white/30 outline-none caret-[#25f4ee] [color-scheme:dark]"
         />
       </form>
 
