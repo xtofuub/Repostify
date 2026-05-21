@@ -12,12 +12,14 @@ import {
   AlertCircle,
   ArrowUpRight,
   BadgeCheck,
+  Check,
   Eye,
   Heart,
   Loader2,
   MessageCircle,
   Search,
   Share2,
+  SlidersHorizontal,
   TriangleAlert,
   Users,
 } from "lucide-react";
@@ -214,6 +216,7 @@ function SearchPanel({
           disabled={loading}
           className="flex-1 bg-transparent text-[15px] sm:text-base text-white placeholder:text-white/35 outline-none disabled:opacity-60"
         />
+        <LimitMenu value={limit} onChange={setLimit} disabled={loading} />
         <PrimaryButton
           type="submit"
           size="md"
@@ -233,70 +236,116 @@ function SearchPanel({
           )}
         </PrimaryButton>
       </form>
-      <div className="px-3 sm:px-4 pt-4 pb-3 flex items-center gap-4">
-        <span className="text-[10px] uppercase tracking-[0.22em] text-white/40 flex-none">
-          Limit
-        </span>
-        <LimitSlider
-          value={limit}
-          disabled={loading}
-          onChange={setLimit}
-        />
-      </div>
     </div>
   );
 }
 
-function LimitSlider({
+function LimitMenu({
   value,
-  disabled,
   onChange,
+  disabled,
 }: {
   value: number;
-  disabled: boolean;
   onChange: (n: number) => void;
+  disabled: boolean;
 }) {
-  const activeIdx = Math.max(
-    0,
-    LIMIT_OPTIONS.findIndex((n) => n === value),
-  );
-  const n = LIMIT_OPTIONS.length;
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      if (!wrapperRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const label = value === 0 ? "All" : String(value);
 
   return (
-    <div
-      role="radiogroup"
-      aria-label="Reposts fetch limit"
-      className="relative grid flex-1 rounded-2xl border border-white/[0.08] bg-black/30 p-1.5"
-      style={{ gridTemplateColumns: `repeat(${n}, 1fr)` }}
-    >
-      {/* Sliding cyan thumb. Composited translateX only. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute top-1.5 bottom-1.5 left-1.5 rounded-xl bg-[#25f4ee] will-change-transform shadow-[0_4px_20px_rgba(37,244,238,0.35),inset_0_1px_0_rgba(255,255,255,0.4)]"
-        style={{
-          width: `calc((100% - 0.75rem) / ${n})`,
-          transform: `translateX(${activeIdx * 100}%)`,
-          transition: "transform 420ms cubic-bezier(0.22, 1, 0.36, 1)",
-        }}
-      />
-      {LIMIT_OPTIONS.map((m, i) => {
-        const active = i === activeIdx;
-        return (
-          <button
-            key={m}
-            type="button"
-            role="radio"
-            aria-checked={active}
-            disabled={disabled}
-            onClick={() => onChange(m)}
-            className={`relative z-10 h-9 text-[13.5px] font-semibold tnum tracking-tight transition-colors duration-300 disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-[#25f4ee]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b] rounded-xl ${
-              active ? "text-[#0a0a0b]" : "text-white/55 hover:text-white/95"
-            }`}
-          >
-            {m === 0 ? "All" : m}
-          </button>
-        );
-      })}
+    <div ref={wrapperRef} className="relative flex-none">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Fetch limit: ${label === "All" ? "every repost" : `${label} reposts`}`}
+        className="h-9 inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] hover:border-white/20 px-2.5 text-white/75 hover:text-white transition-colors disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-[#25f4ee]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b]"
+      >
+        <SlidersHorizontal className="h-3.5 w-3.5 text-white/60" />
+        <span className="text-[12.5px] font-medium tnum tracking-tight">
+          {label}
+        </span>
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          aria-label="Fetch limit options"
+          className="absolute right-0 top-[calc(100%+0.5rem)] z-40 w-60 rounded-xl border border-white/10 bg-[#101012] shadow-[0_24px_60px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.02)] overflow-hidden"
+        >
+          <div className="px-3.5 pt-3 pb-2 border-b border-white/8">
+            <p className="text-[10px] uppercase tracking-[0.22em] text-white/40">
+              Fetch limit
+            </p>
+            <p className="mt-1 text-[12px] text-white/55 leading-[1.5]">
+              How many reposts to pull. Smaller = faster.
+            </p>
+          </div>
+          <ul className="py-1">
+            {LIMIT_OPTIONS.map((m) => {
+              const active = m === value;
+              const big = m === 0;
+              return (
+                <li key={m}>
+                  <button
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={active}
+                    onClick={() => {
+                      onChange(m);
+                      setOpen(false);
+                    }}
+                    className={`w-full px-3.5 py-2 flex items-baseline justify-between gap-3 text-left transition-colors outline-none focus-visible:bg-white/[0.05] ${
+                      active
+                        ? "bg-white/[0.04] text-white"
+                        : "text-white/70 hover:bg-white/[0.03] hover:text-white"
+                    }`}
+                  >
+                    <span className="inline-flex items-baseline gap-2">
+                      <span
+                        className={`font-display text-[16px] tnum tracking-tight ${
+                          active ? "text-white" : "text-white/85"
+                        }`}
+                      >
+                        {big ? "All" : m}
+                      </span>
+                      <span className="text-[11.5px] text-white/45">
+                        {big ? "every repost" : "reposts"}
+                      </span>
+                    </span>
+                    {active && (
+                      <Check className="h-3.5 w-3.5 text-[#25f4ee] self-center" />
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="px-3.5 py-2 border-t border-white/8 text-[10.5px] text-white/40 leading-[1.5]">
+            Larger feeds take longer. Cancel by reloading.
+          </div>
+        </div>
+      )}
     </div>
   );
 }
