@@ -237,62 +237,105 @@ function SearchPanel({
           )}
         </PrimaryButton>
       </form>
-      <div className="px-3 sm:px-4 pt-3.5 pb-3.5 space-y-3">
-        <div className="flex items-center gap-3">
-          <span className="text-[10px] uppercase tracking-[0.22em] text-white/45 w-14 flex-none">
+      <div className="px-3 sm:px-4 pt-4 pb-3">
+        {/* Limit: sliding segmented control. The cyan thumb slides between
+            stops with a composited transform (no layout property animation),
+            so the control reads as a single continuous mechanism rather than
+            five disconnected pills. Numbers tnum so widths stay stable. */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="text-[10px] uppercase tracking-[0.22em] text-white/40">
             Limit
           </span>
-          <div
-            role="radiogroup"
-            aria-label="Reposts fetch limit"
-            className="flex items-center gap-1.5 flex-wrap"
-          >
-            {LIMIT_OPTIONS.map((n) => {
-              const active = n === limit;
-              return (
-                <button
-                  key={n}
-                  type="button"
-                  role="radio"
-                  aria-checked={active}
-                  disabled={loading}
-                  onClick={() => setLimit(n)}
-                  className={`text-[13px] font-medium tnum px-3.5 py-1.5 rounded-lg transition-colors duration-150 disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-[#25f4ee]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b] ${
-                    active
-                      ? "bg-[#25f4ee] text-black"
-                      : "bg-white/[0.04] text-white/65 hover:bg-white/[0.08] hover:text-white border border-white/8"
-                  }`}
-                >
-                  {n === 0 ? "All" : n}
-                </button>
-              );
-            })}
-          </div>
+          <LimitSlider
+            value={limit}
+            disabled={loading}
+            onChange={setLimit}
+          />
         </div>
 
-        <div className="flex items-center gap-3">
-          <span className="text-[10px] uppercase tracking-[0.22em] text-white/45 w-14 flex-none">
+        {/* Try: inline editorial row, intentionally different shape from the
+            segmented control above. Suggestions, not selections. */}
+        <p className="mt-4 text-[12.5px] leading-[1.7] text-white/55">
+          <span className="text-[10px] uppercase tracking-[0.22em] text-white/40 mr-2.5">
             Try
           </span>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {EXAMPLES.map((u) => (
+          {EXAMPLES.map((u, i) => (
+            <span key={u} className="whitespace-nowrap">
+              {i > 0 && (
+                <span aria-hidden className="mx-2.5 text-white/20">
+                  ·
+                </span>
+              )}
               <button
-                key={u}
                 type="button"
                 disabled={loading}
                 onClick={() => {
                   setInput(u);
                   run(u);
                 }}
-                className="text-[13px] px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/8 text-white/70 hover:text-white hover:bg-white/[0.08] hover:border-white/15 transition-colors duration-150 disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-[#25f4ee]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b]"
+                className="text-white/70 hover:text-white transition-colors disabled:opacity-50 outline-none focus-visible:text-white focus-visible:underline focus-visible:underline-offset-4 focus-visible:decoration-[#25f4ee]"
               >
                 <span className="text-white/40">@</span>
                 {u}
               </button>
-            ))}
-          </div>
-        </div>
+            </span>
+          ))}
+        </p>
       </div>
+    </div>
+  );
+}
+
+function LimitSlider({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: number;
+  disabled: boolean;
+  onChange: (n: number) => void;
+}) {
+  const activeIdx = Math.max(
+    0,
+    LIMIT_OPTIONS.findIndex((n) => n === value),
+  );
+  const n = LIMIT_OPTIONS.length;
+
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Reposts fetch limit"
+      className="relative inline-flex items-stretch rounded-xl border border-white/10 bg-white/[0.025] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
+    >
+      {/* Sliding cyan thumb. Transform-only animation = composited, no
+          layout recalc. */}
+      <div
+        aria-hidden
+        className="absolute top-1 bottom-1 left-1 rounded-lg bg-[#25f4ee] will-change-transform shadow-[0_2px_10px_rgba(37,244,238,0.25)]"
+        style={{
+          width: `calc((100% - 0.5rem) / ${n})`,
+          transform: `translateX(${activeIdx * 100}%)`,
+          transition: "transform 360ms cubic-bezier(0.22, 1, 0.36, 1)",
+        }}
+      />
+      {LIMIT_OPTIONS.map((m, i) => {
+        const active = i === activeIdx;
+        return (
+          <button
+            key={m}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            disabled={disabled}
+            onClick={() => onChange(m)}
+            className={`relative z-10 min-w-[3.25rem] px-3 py-1.5 text-[13px] font-semibold tnum tracking-tight transition-colors duration-300 disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-[#25f4ee]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b] rounded-lg ${
+              active ? "text-[#0a0a0b]" : "text-white/60 hover:text-white"
+            }`}
+          >
+            {m === 0 ? "All" : m}
+          </button>
+        );
+      })}
     </div>
   );
 }
