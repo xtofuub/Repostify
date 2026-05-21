@@ -87,21 +87,16 @@ function HandleJsonLd({ username }: { username: string }) {
 
 export default async function HandlePage({
   params,
-  searchParams,
 }: {
   params: Promise<{ username: string }>;
-  searchParams?: Promise<{ anon?: string }>;
 }) {
   const { username: raw } = await params;
   const username = normalize(raw);
   if (!HANDLE_RE.test(username)) notFound();
-  const sp = searchParams ? await searchParams : {};
-  const anon = sp?.anon === "1";
-  const displayHandle = anon ? "•••••" : `@${username}`;
 
   return (
     <div className="relative min-h-screen overflow-x-hidden flex flex-col">
-      {!anon && <HandleJsonLd username={username} />}
+      <HandleJsonLd username={username} />
       <BackgroundVideo src={BG} />
       <GuideLines />
 
@@ -113,19 +108,12 @@ export default async function HandlePage({
               Repostify
             </span>
           </Link>
-          <div className="flex items-center gap-5">
-            {anon && (
-              <span className="text-[10px] uppercase tracking-[0.22em] text-[#25f4ee] border border-[#25f4ee]/40 rounded-full px-2.5 py-1">
-                Anonymous view
-              </span>
-            )}
-            <Link
-              href="/"
-              className="text-[12px] uppercase tracking-[0.22em] text-white/55 hover:text-white transition-colors"
-            >
-              New search
-            </Link>
-          </div>
+          <Link
+            href="/"
+            className="text-[12px] uppercase tracking-[0.22em] text-white/55 hover:text-white transition-colors"
+          >
+            New search
+          </Link>
         </nav>
 
         <main className="flex-1">
@@ -135,7 +123,7 @@ export default async function HandlePage({
               <SectionLabel>TikTok profile</SectionLabel>
               <h1 className="mt-5 font-display text-[clamp(2.2rem,5.5vw,4.5rem)] leading-[0.95] tracking-[-0.02em]">
                 Reposts by{" "}
-                <span className="italic text-[#25f4ee]">{displayHandle}</span>
+                <span className="italic text-[#25f4ee]">@{username}</span>
               </h1>
               <p className="mt-5 max-w-[44ch] mx-auto text-[14px] leading-[1.65] text-white/60">
                 Loading the public profile, opening the reposts tab, and
