@@ -137,50 +137,50 @@ function Navbar() {
 
 function Hero() {
   return (
-    <header className="relative pt-12 pb-16 md:pt-16 md:pb-20">
+    <header className="relative pt-14 pb-20 md:pt-20 md:pb-24">
       <div className="aurora absolute inset-x-0 top-0 h-[640px] -z-[1]" />
       <div className="max-w-[72rem] mx-auto px-6">
-        <div className="text-center max-w-[46rem] mx-auto">
+        <div className="text-center max-w-[58rem] mx-auto">
           <SectionLabel>TikTok repost viewer</SectionLabel>
-          <h1 className="mt-6 font-display text-[clamp(2.4rem,6.2vw,5.25rem)] leading-[0.95] tracking-[-0.02em]">
+          <h1 className="mt-7 font-display text-[clamp(2.8rem,7.5vw,6rem)] leading-[0.95] tracking-[-0.025em]">
             See what{" "}
-            <span className="italic text-[#25f4ee]">they</span>{" "}
-            repost.
-            <br />
-            They never know you looked.
+            <span className="italic text-[#25f4ee]">they</span> repost.
+            <span className="block text-white/60 mt-2 text-[clamp(1.6rem,4vw,3.25rem)] leading-[1.05] tracking-[-0.015em]">
+              They never know you looked.
+            </span>
           </h1>
-          <p className="mt-6 max-w-[50ch] mx-auto text-[15px] leading-[1.65] text-white/70">
+
+          <p className="mt-8 max-w-[52ch] mx-auto text-[15.5px] leading-[1.7] text-white/70">
             Paste any public TikTok handle. We open the profile as anonymous
             traffic, walk the reposts tab, and pull every video they amplified.
             No TikTok account on your end. No notification on theirs.
           </p>
 
-          {/* Three quiet promises — explicit because the watcher is checking
-              for these before they paste. */}
-          <ul className="mt-7 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[12px] text-white/55">
-            <li className="flex items-center gap-1.5">
+          {/* Three explicit promises — the watcher checks these before pasting. */}
+          <ul className="mt-8 flex flex-wrap items-center justify-center gap-x-7 gap-y-2 text-[13px] text-white/70">
+            <li className="flex items-center gap-2">
               <span className="h-1.5 w-1.5 rounded-full bg-[#25f4ee]" />
               No login, no signup
             </li>
-            <li className="flex items-center gap-1.5">
+            <li className="flex items-center gap-2">
               <span className="h-1.5 w-1.5 rounded-full bg-[#25f4ee]" />
               They don&apos;t get notified
             </li>
-            <li className="flex items-center gap-1.5">
+            <li className="flex items-center gap-2">
               <span className="h-1.5 w-1.5 rounded-full bg-[#25f4ee]" />
-              Works on any public profile
+              Any public profile
             </li>
           </ul>
         </div>
 
-        <div className="mt-9">
+        <div className="mt-12">
           <RepostSearch />
         </div>
 
-        <p className="mt-6 max-w-[42rem] mx-auto text-center text-[12px] leading-[1.6] text-white/45">
-          If the result lands empty, the profile&apos;s reposts tab is set to
-          private. Try another handle, or check your own to see what strangers
-          see when they land on yours.
+        <p className="mt-6 max-w-[44rem] mx-auto text-center text-[12.5px] leading-[1.65] text-white/45">
+          Empty result? Their reposts tab is set to private. Try another
+          handle, or check your own to see what strangers see when they land
+          on yours.
         </p>
       </div>
     </header>
@@ -191,46 +191,30 @@ function FAQ() {
   const items = FAQ_ITEMS;
   return (
     <section id="faq" className="relative scroll-mt-24 py-20 md:py-24">
-      <div className="max-w-[72rem] mx-auto px-6">
-        <div className="grid grid-cols-12 gap-x-6 gap-y-8 items-start">
-          <div className="col-span-12 md:col-span-4">
-            <SectionLabel>The questions you don&apos;t ask out loud</SectionLabel>
-            <h2 className="mt-6 font-display text-[clamp(2rem,4vw,3.25rem)] leading-[0.95] tracking-[-0.015em]">
-              Look first.{" "}
-              <span className="italic text-white/55">Paste second.</span>
-            </h2>
-            <p className="mt-5 text-[14px] leading-[1.65] text-white/55 max-w-[42ch]">
-              The honest answers about who sees what, before you put a handle
-              in the search bar.
-            </p>
-          </div>
-          <div className="col-span-12 md:col-span-8 space-y-2.5">
-            {items.map((it, i) => (
-              <details
-                key={it.q}
-                className="group rounded-2xl border border-white/8 bg-white/[0.02] open:bg-white/[0.04] open:border-white/20 transition-colors"
-              >
-                <summary className="flex items-center cursor-pointer list-none gap-4 px-5 py-4 sm:px-6">
-                  <span className="text-[10.5px] tnum text-white/35 w-6 tracking-[0.18em]">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  <span className="text-[15px] font-medium flex-1">
-                    {it.q}
-                  </span>
-                  <span className="text-white/50 group-open:rotate-45 transition-transform duration-300 text-2xl leading-none flex-none">
-                    +
-                  </span>
-                </summary>
-                <div className="px-5 sm:px-6 pb-5">
-                  <div className="pl-10">
-                    <p className="text-[14px] leading-[1.7] text-white/75 max-w-[68ch]">
-                      {it.a}
-                    </p>
-                  </div>
-                </div>
-              </details>
-            ))}
-          </div>
+      <div className="max-w-[60rem] mx-auto px-6">
+        <div className="text-center mb-12">
+          <SectionLabel>FAQ</SectionLabel>
+          <h2 className="mt-5 font-display text-[clamp(2rem,4vw,3rem)] leading-[1] tracking-[-0.015em]">
+            Questions, answered.
+          </h2>
+        </div>
+        <div className="space-y-3">
+          {items.map((it) => (
+            <details
+              key={it.q}
+              className="group rounded-xl border border-white/10 bg-white/[0.02] open:bg-white/[0.04] open:border-white/20 transition-colors"
+            >
+              <summary className="flex items-center justify-between cursor-pointer list-none gap-4 px-5 py-4">
+                <span className="text-[15px] font-medium">{it.q}</span>
+                <span className="text-white/50 group-open:rotate-45 transition-transform text-xl leading-none flex-none">
+                  +
+                </span>
+              </summary>
+              <p className="px-5 pb-5 text-[14px] leading-[1.65] text-white/70 max-w-[68ch]">
+                {it.a}
+              </p>
+            </details>
+          ))}
         </div>
       </div>
     </section>

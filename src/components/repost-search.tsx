@@ -237,18 +237,17 @@ function SearchPanel({
           )}
         </PrimaryButton>
       </form>
-      <div className="px-3 sm:px-4 pt-4 pb-2 space-y-3.5">
-        {/* Limit: segmented control. Selected gets a cyan underline ribbon
-            instead of a full cyan fill — the brand color stays an accent
-            (≤10% of surface) per the Restrained color strategy. */}
-        <div className="flex items-center gap-3">
-          <span className="text-[10px] uppercase tracking-[0.22em] text-white/45 w-12 flex-none">
+      <div className="px-4 sm:px-5 pt-5 pb-3 space-y-4">
+        {/* Limit chips — distinct pills, generous gap, active gets a thin
+            cyan underline (accent stays ≤10% surface per brand). */}
+        <div className="flex items-center gap-4 flex-wrap">
+          <span className="text-[10px] uppercase tracking-[0.22em] text-white/45 flex-none">
             Limit
           </span>
           <div
             role="radiogroup"
             aria-label="Reposts fetch limit"
-            className="inline-flex items-stretch rounded-xl bg-white/[0.04] border border-white/10 overflow-hidden divide-x divide-white/8 p-0.5"
+            className="flex items-center gap-2 flex-wrap"
           >
             {LIMIT_OPTIONS.map((n) => {
               const active = n === limit;
@@ -260,15 +259,15 @@ function SearchPanel({
                   aria-checked={active}
                   disabled={loading}
                   onClick={() => setLimit(n)}
-                  className={`relative text-[12.5px] font-medium tnum px-3.5 py-1.5 transition-colors duration-150 disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-[#25f4ee]/50 ${
+                  className={`relative tnum font-medium text-[13px] h-8 px-3.5 rounded-lg transition-colors duration-150 disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-[#25f4ee]/50 ${
                     active
-                      ? "bg-white/[0.06] text-white"
-                      : "text-white/55 hover:text-white"
+                      ? "bg-white/[0.08] text-white border border-white/20"
+                      : "bg-white/[0.02] border border-white/8 text-white/60 hover:text-white hover:bg-white/[0.05] hover:border-white/15"
                   }`}
                 >
                   {n === 0 ? "All" : n}
                   {active && (
-                    <span className="absolute left-2.5 right-2.5 -bottom-px h-[2px] bg-[#25f4ee] rounded-full" />
+                    <span className="absolute left-3 right-3 -bottom-[3px] h-[2px] bg-[#25f4ee] rounded-full" />
                   )}
                 </button>
               );
@@ -276,13 +275,12 @@ function SearchPanel({
           </div>
         </div>
 
-        {/* Examples: lighter visual weight than the search field, but more
-            obviously tappable than plain text links. */}
-        <div className="flex items-center gap-3">
-          <span className="text-[10px] uppercase tracking-[0.22em] text-white/45 w-12 flex-none">
+        {/* Try chips — quieter than limit, but still tappable pills. */}
+        <div className="flex items-center gap-4 flex-wrap">
+          <span className="text-[10px] uppercase tracking-[0.22em] text-white/45 flex-none">
             Try
           </span>
-          <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
             {EXAMPLES.map((u) => (
               <button
                 key={u}
@@ -292,9 +290,9 @@ function SearchPanel({
                   setInput(u);
                   run(u);
                 }}
-                className="group inline-flex items-center gap-0.5 text-[12.5px] px-2.5 py-1.5 rounded-md text-white/65 hover:text-white hover:bg-white/[0.05] transition-colors disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-[#25f4ee]/50"
+                className="group inline-flex items-center text-[13px] h-8 px-3 rounded-lg bg-white/[0.02] border border-white/8 text-white/70 hover:text-white hover:bg-white/[0.05] hover:border-white/15 transition-colors disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-[#25f4ee]/50"
               >
-                <span className="text-white/35 group-hover:text-[#25f4ee] transition-colors">
+                <span className="text-white/35 group-hover:text-[#25f4ee] transition-colors mr-0.5">
                   @
                 </span>
                 {u}
