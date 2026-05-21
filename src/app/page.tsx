@@ -12,8 +12,8 @@ import { SITE_NAME, SITE_URL } from "@/lib/seo";
 
 const FAQ_ITEMS = [
   {
-    q: "Why do I only get around thirty reposts?",
-    a: "TikTok throws a slider captcha the moment anonymous traffic asks for a second page of reposts. Repostify reads everything before that gate and then stops, with no solver and no proxy roulette.",
+    q: "How many reposts does it pull?",
+    a: "Every public repost on the profile. TikTok paginates the reposts feed roughly 30 items at a time, and we walk every page until the server signals no more. Big feeds (hundreds of items) finish in one to three minutes; small ones in under a minute.",
   },
   {
     q: "Can I play the videos here?",
@@ -150,9 +150,8 @@ function Hero() {
           <RepostSearch />
         </div>
         <p className="mt-6 max-w-[44rem] mx-auto text-center text-[12px] leading-[1.6] text-white/45">
-          Public profiles only. No login. TikTok shows a captcha after the
-          first batch, so each session captures roughly thirty reposts. If a
-          result lands empty, the profile&apos;s reposts tab is private.
+          Public profiles only. No login. An empty result means the
+          profile&apos;s reposts tab is set to private.
         </p>
       </div>
     </header>
