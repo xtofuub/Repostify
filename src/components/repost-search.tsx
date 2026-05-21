@@ -45,7 +45,6 @@ type Aggregates = {
   topCreators: [string, number][];
 };
 
-const EXAMPLES = ["khaby.lame", "mrbeast", "charlidamelio", "zachking"];
 const LIMIT_OPTIONS = [30, 60, 120, 250, 0] as const;
 
 export function RepostSearch({
@@ -136,7 +135,6 @@ export function RepostSearch({
         setInput={setInput}
         onSubmit={onSubmit}
         loading={state.kind === "loading"}
-        run={run}
         limit={limit}
         setLimit={setLimit}
       />
@@ -188,7 +186,6 @@ function SearchPanel({
   setInput,
   onSubmit,
   loading,
-  run,
   limit,
   setLimit,
 }: {
@@ -196,7 +193,6 @@ function SearchPanel({
   setInput: (s: string) => void;
   onSubmit: (e: FormEvent) => void;
   loading: boolean;
-  run: (u: string) => void;
   limit: number;
   setLimit: (n: number) => void;
 }) {
@@ -237,50 +233,15 @@ function SearchPanel({
           )}
         </PrimaryButton>
       </form>
-      <div className="px-3 sm:px-4 pt-4 pb-3">
-        {/* Limit: sliding segmented control. The cyan thumb slides between
-            stops with a composited transform (no layout property animation),
-            so the control reads as a single continuous mechanism rather than
-            five disconnected pills. Numbers tnum so widths stay stable. */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <span className="text-[10px] uppercase tracking-[0.22em] text-white/40">
-            Limit
-          </span>
-          <LimitSlider
-            value={limit}
-            disabled={loading}
-            onChange={setLimit}
-          />
-        </div>
-
-        {/* Try: inline editorial row, intentionally different shape from the
-            segmented control above. Suggestions, not selections. */}
-        <p className="mt-4 text-[12.5px] leading-[1.7] text-white/55">
-          <span className="text-[10px] uppercase tracking-[0.22em] text-white/40 mr-2.5">
-            Try
-          </span>
-          {EXAMPLES.map((u, i) => (
-            <span key={u} className="whitespace-nowrap">
-              {i > 0 && (
-                <span aria-hidden className="mx-2.5 text-white/20">
-                  ·
-                </span>
-              )}
-              <button
-                type="button"
-                disabled={loading}
-                onClick={() => {
-                  setInput(u);
-                  run(u);
-                }}
-                className="text-white/70 hover:text-white transition-colors disabled:opacity-50 outline-none focus-visible:text-white focus-visible:underline focus-visible:underline-offset-4 focus-visible:decoration-[#25f4ee]"
-              >
-                <span className="text-white/40">@</span>
-                {u}
-              </button>
-            </span>
-          ))}
-        </p>
+      <div className="px-3 sm:px-4 pt-4 pb-3 flex items-center gap-4">
+        <span className="text-[10px] uppercase tracking-[0.22em] text-white/40 flex-none">
+          Limit
+        </span>
+        <LimitSlider
+          value={limit}
+          disabled={loading}
+          onChange={setLimit}
+        />
       </div>
     </div>
   );
@@ -305,17 +266,17 @@ function LimitSlider({
     <div
       role="radiogroup"
       aria-label="Reposts fetch limit"
-      className="relative inline-flex items-stretch rounded-xl border border-white/10 bg-white/[0.025] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
+      className="relative grid flex-1 rounded-2xl border border-white/[0.08] bg-black/30 p-1.5"
+      style={{ gridTemplateColumns: `repeat(${n}, 1fr)` }}
     >
-      {/* Sliding cyan thumb. Transform-only animation = composited, no
-          layout recalc. */}
+      {/* Sliding cyan thumb. Composited translateX only. */}
       <div
         aria-hidden
-        className="absolute top-1 bottom-1 left-1 rounded-lg bg-[#25f4ee] will-change-transform shadow-[0_2px_10px_rgba(37,244,238,0.25)]"
+        className="pointer-events-none absolute top-1.5 bottom-1.5 left-1.5 rounded-xl bg-[#25f4ee] will-change-transform shadow-[0_4px_20px_rgba(37,244,238,0.35),inset_0_1px_0_rgba(255,255,255,0.4)]"
         style={{
-          width: `calc((100% - 0.5rem) / ${n})`,
+          width: `calc((100% - 0.75rem) / ${n})`,
           transform: `translateX(${activeIdx * 100}%)`,
-          transition: "transform 360ms cubic-bezier(0.22, 1, 0.36, 1)",
+          transition: "transform 420ms cubic-bezier(0.22, 1, 0.36, 1)",
         }}
       />
       {LIMIT_OPTIONS.map((m, i) => {
@@ -328,8 +289,8 @@ function LimitSlider({
             aria-checked={active}
             disabled={disabled}
             onClick={() => onChange(m)}
-            className={`relative z-10 min-w-[3.25rem] px-3 py-1.5 text-[13px] font-semibold tnum tracking-tight transition-colors duration-300 disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-[#25f4ee]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b] rounded-lg ${
-              active ? "text-[#0a0a0b]" : "text-white/60 hover:text-white"
+            className={`relative z-10 h-9 text-[13.5px] font-semibold tnum tracking-tight transition-colors duration-300 disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-[#25f4ee]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b] rounded-xl ${
+              active ? "text-[#0a0a0b]" : "text-white/55 hover:text-white/95"
             }`}
           >
             {m === 0 ? "All" : m}
