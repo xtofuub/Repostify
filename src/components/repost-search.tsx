@@ -349,19 +349,39 @@ function Results({
   const { profile, reposts, username } = data;
   const [keywords, setKeywords] = useState<string[]>([]);
   const [draft, setDraft] = useState("");
+  const [exact, setExact] = useState(false);
 
-  // Live filtering: in-progress draft text also filters, so the grid updates
-  // before the user hits Enter.
-  const filtered = useMemo(() => {
+  // Visibility mask: which reposts pass the filter. We render ALL cards
+  // always and toggle visibility via CSS, so changing the filter doesn't
+  // unmount cards (preserves image cache + animation state).
+  const { mask, matchedCount } = useMemo(() => {
     const liveDraft = draft.trim().toLowerCase();
     const lc = keywords.map((k) => k.toLowerCase());
-    if (lc.length === 0 && !liveDraft) return reposts;
     const all = liveDraft ? [...lc, liveDraft] : lc;
-    return reposts.filter((r) => {
+    if (all.length === 0) {
+      return { mask: reposts.map(() => true), matchedCount: reposts.length };
+    }
+    // Pre-build regex when exact mode is on; word boundary on either side.
+    const matchers = exact
+      ? all.map(
+          (k) =>
+            new RegExp(
+              `\\b${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
+              "i",
+            ),
+        )
+      : null;
+    let count = 0;
+    const m = reposts.map((r) => {
       const desc = (r.desc ?? "").toLowerCase();
-      return all.some((k) => desc.includes(k));
+      const hit = exact
+        ? matchers!.some((rx) => rx.test(desc))
+        : all.some((k) => desc.includes(k));
+      if (hit) count++;
+      return hit;
     });
-  }, [reposts, keywords, draft]);
+    return { mask: m, matchedCount: count };
+  }, [reposts, keywords, draft, exact]);
 
   if (reposts.length === 0) {
     return (
@@ -400,10 +420,16 @@ function Results({
         setKeywords={setKeywords}
         draft={draft}
         setDraft={setDraft}
-        matchedCount={filtered.length}
+        exact={exact}
+        setExact={setExact}
+        matchedCount={matchedCount}
       />
 
-      <RepostGrid reposts={filtered} totalAvailable={reposts.length} />
+      <RepostGrid
+        reposts={reposts}
+        visibilityMask={mask}
+        matchedCount={matchedCount}
+      />
     </div>
   );
 }
@@ -414,6 +440,8 @@ function FilterBar({
   setKeywords,
   draft,
   setDraft,
+  exact,
+  setExact,
   matchedCount,
 }: {
   reposts: Repost[];
@@ -421,6 +449,8 @@ function FilterBar({
   setKeywords: (k: string[]) => void;
   draft: string;
   setDraft: (s: string) => void;
+  exact: boolean;
+  setExact: (b: boolean) => void;
   matchedCount: number;
 }) {
 
@@ -457,13 +487,35 @@ function FilterBar({
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 sm:p-5">
       <div className="flex items-center justify-between gap-4 flex-wrap mb-3">
-        <div className="flex items-center gap-2 text-white/55">
-          <Filter className="h-3.5 w-3.5" />
-          <span className="text-[11px] font-medium uppercase tracking-[0.18em]">
-            Filter captions
-          </span>
+        <div className="flex items-center gap-3 text-white/55">
+          <div className="flex items-center gap-2">
+            <Filter className="h-3.5 w-3.5" />
+            <span className="text-[11px] font-medium uppercase tracking-[0.18em]">
+              Filter captions
+            </span>
+          </div>
+          {/* Exact / Fuzzy toggle. Fuzzy = substring match (default).
+              Exact = word-boundary regex, so "ex" stops matching "complex". */}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={exact}
+            onClick={() => setExact(!exact)}
+            className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full border border-white/10 bg-white/[0.03] hover:bg-white/[0.06] transition-colors text-[11px] tracking-tight"
+            title="Toggle whole-word matching"
+          >
+            <span
+              aria-hidden
+              className={`h-1.5 w-1.5 rounded-full transition-colors ${
+                exact ? "bg-[#25f4ee]" : "bg-white/25"
+              }`}
+            />
+            <span className={exact ? "text-white" : "text-white/55"}>
+              {exact ? "Exact word" : "Fuzzy"}
+            </span>
+          </button>
         </div>
-        {keywords.length > 0 && (
+        {(keywords.length > 0 || draft.trim()) && (
           <div className="flex items-center gap-3 text-[11.5px] text-white/45">
             <span>
               <span className="text-white tnum">{matchedCount}</span>{" "}
@@ -471,16 +523,23 @@ function FilterBar({
               <span className="tnum text-white/75">{reposts.length}</span>{" "}
               match
             </span>
-            <span aria-hidden className="text-white/15">
-              ·
-            </span>
-            <button
-              type="button"
-              onClick={() => setKeywords([])}
-              className="text-[11px] uppercase tracking-[0.18em] text-white/45 hover:text-white transition-colors"
-            >
-              Clear
-            </button>
+            {keywords.length > 0 && (
+              <>
+                <span aria-hidden className="text-white/15">
+                  ·
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setKeywords([]);
+                    setDraft("");
+                  }}
+                  className="text-[11px] uppercase tracking-[0.18em] text-white/45 hover:text-white transition-colors"
+                >
+                  Clear
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -729,27 +788,53 @@ function TopCreators({
 
 function RepostGrid({
   reposts,
-  totalAvailable,
+  visibilityMask,
+  matchedCount,
 }: {
   reposts: Repost[];
-  totalAvailable?: number;
+  visibilityMask?: boolean[];
+  matchedCount?: number;
 }) {
   const [playingIndex, setPlayingIndex] = useState<number | null>(null);
-  const showing = reposts.length;
-  const total = totalAvailable ?? showing;
-  const filtered = total > showing;
+  const total = reposts.length;
+  const showing = matchedCount ?? total;
+  const filtered = visibilityMask && showing < total;
+
+  // Visible-only list passed to the player so prev/next skip hidden cards.
+  const visibleList = useMemo(() => {
+    if (!visibilityMask) return reposts;
+    return reposts.filter((_, i) => visibilityMask[i]);
+  }, [reposts, visibilityMask]);
+
+  // Map: original index → visible index (for clicks on the masked grid).
+  const visibleIndexFromOriginal = useMemo(() => {
+    if (!visibilityMask) return null;
+    const map = new Map<number, number>();
+    let v = 0;
+    for (let i = 0; i < reposts.length; i++) {
+      if (visibilityMask[i]) {
+        map.set(i, v);
+        v++;
+      }
+    }
+    return map;
+  }, [reposts, visibilityMask]);
+
   return (
     <div>
       <div className="flex items-baseline justify-between mb-4">
         <p className="text-[11px] uppercase tracking-[0.22em] text-white/55">
-          Reel · {filtered ? `${showing} of ${total} items` : `${showing} item${showing === 1 ? "" : "s"}`}
+          Reel ·{" "}
+          {filtered
+            ? `${showing} of ${total} items`
+            : `${showing} item${showing === 1 ? "" : "s"}`}
         </p>
         <p className="text-[11px] uppercase tracking-[0.18em] text-white/40">
           By recency · click to play · scroll / arrows to navigate
         </p>
       </div>
 
-      {reposts.length === 0 && (
+      {showing === 0 && (
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-10 text-center">
           <p className="text-[14px] text-white/65">
             No reposts match your filter. Clear it to see them all.
@@ -757,23 +842,37 @@ function RepostGrid({
         </div>
       )}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-        {reposts.map((r, i) => (
-          <motion.div
-            key={r.id}
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{
-              duration: 0.55,
-              delay: Math.min(i * 0.025, 0.5),
-              ease: [0.16, 1, 0.3, 1],
-            }}
-          >
-            <RepostCard repost={r} onPlay={() => setPlayingIndex(i)} />
-          </motion.div>
-        ))}
+        {reposts.map((r, i) => {
+          const visible = visibilityMask ? visibilityMask[i] : true;
+          return (
+            <motion.div
+              key={r.id}
+              // Keep DOM mounted: just collapse to zero size when filtered out.
+              // Preserves image cache + player nav indices.
+              className={visible ? "" : "hidden"}
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{
+                duration: 0.55,
+                delay: Math.min(i * 0.025, 0.5),
+                ease: [0.16, 1, 0.3, 1],
+              }}
+            >
+              <RepostCard
+                repost={r}
+                onPlay={() => {
+                  const v = visibleIndexFromOriginal
+                    ? visibleIndexFromOriginal.get(i) ?? null
+                    : i;
+                  setPlayingIndex(v);
+                }}
+              />
+            </motion.div>
+          );
+        })}
       </div>
       <RepostPlayer
-        reposts={reposts}
+        reposts={visibleList}
         index={playingIndex}
         onClose={() => setPlayingIndex(null)}
         onIndexChange={setPlayingIndex}
