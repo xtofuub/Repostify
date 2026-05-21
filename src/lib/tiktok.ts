@@ -7,6 +7,8 @@ export type Repost = {
   id: string;
   desc: string;
   createTime: number;
+  // When the account reposted this video. 0 if TikTok did not expose it.
+  repostedAt: number;
   cover: string;
   playUrl: string;
   duration: number;
@@ -53,6 +55,13 @@ type TikTokItem = {
   id: string;
   desc?: string;
   createTime?: number;
+  // Speculative — TikTok's anonymous XHR sometimes includes one of these.
+  // Field names vary across endpoints. We sniff and fall back to createTime
+  // if none surface. None of these are documented; treat as best-effort.
+  repost_time?: number;
+  reposted_at?: number;
+  addedAt?: number;
+  repostTime?: number;
   video?: {
     cover?: string;
     originCover?: string;
@@ -97,10 +106,28 @@ function normalizeItem(item: TikTokItem): Repost | null {
   if (!item?.id || !item.author?.uniqueId) return null;
   const stats = item.stats ?? {};
   const statsV2 = item.statsV2 ?? {};
+
+  // Try to find a repost timestamp on the raw item. Accept only values that
+  // look like a plausible unix-seconds timestamp (> 2010-01-01 epoch).
+  const candidates: Array<number | undefined> = [
+    item.repost_time,
+    item.reposted_at,
+    item.addedAt,
+    item.repostTime,
+  ];
+  let repostedAt = 0;
+  for (const c of candidates) {
+    if (typeof c === "number" && c > 1_262_300_400) {
+      repostedAt = c;
+      break;
+    }
+  }
+
   return {
     id: item.id,
     desc: item.desc ?? "",
     createTime: item.createTime ?? 0,
+    repostedAt,
     cover:
       item.video?.dynamicCover ||
       item.video?.cover ||

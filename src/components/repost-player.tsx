@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   X,
@@ -12,6 +12,7 @@ import {
   ChevronUp,
   ChevronDown,
   Volume2,
+  VolumeX,
 } from "lucide-react";
 import type { Repost } from "@/lib/tiktok";
 import { formatCount, formatRelativeTime } from "@/lib/format";
@@ -35,7 +36,79 @@ export function RepostPlayer({
   const open = index !== null && index >= 0 && index < reposts.length;
   const repost = open ? reposts[index] : null;
   const wheelLockRef = useRef(0);
-  const [hint, setHint] = useState(true);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [muted, setMuted] = useState(true);
+
+  // TikTok iframe player exposes a postMessage API. Spec:
+  // https://developers.tiktok.com/doc/embed-player. Posting {type:"unMute"}
+  // works only after the player signals onPlayerReady.
+  const postToPlayer = useCallback((type: string, value?: unknown) => {
+    iframeRef.current?.contentWindow?.postMessage(
+      { type, value, "x-tiktok-player": true },
+      "*",
+    );
+  }, []);
+
+  // Listen for ready signal from the iframe, then unmute.
+  useEffect(() => {
+    if (!repost) return;
+    const onMsg = (e: MessageEvent) => {
+      if (!e.origin.endsWith("tiktok.com")) return;
+      const data = typeof e.data === "string"
+        ? (() => { try { return JSON.parse(e.data); } catch { return null; } })()
+        : e.data;
+      if (!data || typeof data !== "object") return;
+      const t = (data as { type?: string }).type;
+      if (t === "onPlayerReady" || t === "onPlayerReadyForUnMute" || t === "playerReady") {
+        postToPlayer("unMute");
+        setMuted(false);
+      }
+      if (t === "onMute") setMuted(Boolean((data as { value?: boolean }).value));
+    };
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, [repost, postToPlayer]);
+
+  // Belt-and-suspenders: also try unmuting on a short delay after load, in
+  // case the player never fires onPlayerReady but is still accepting messages.
+  useEffect(() => {
+    if (!repost) return;
+    const ids: number[] = [];
+    [400, 900, 1600, 2500].forEach((delay) => {
+      ids.push(window.setTimeout(() => postToPlayer("unMute"), delay));
+    });
+    return () => ids.forEach(clearTimeout);
+  }, [repost?.id, postToPlayer]);
+
+  const toggleMute = useCallback(() => {
+    postToPlayer(muted ? "unMute" : "mute");
+    setMuted((m) => !m);
+  }, [muted, postToPlayer]);
+
+  // Prefetch the iframe URL of the previous + next reposts. Browser warms
+  // DNS, TLS, and (when allowed) the player HTML, so scroll-nav is faster.
+  useEffect(() => {
+    if (index === null) return;
+    const neighbors: number[] = [index - 1, index + 1].filter(
+      (i) => i >= 0 && i < reposts.length && i !== index,
+    );
+    const links: HTMLLinkElement[] = [];
+    for (const i of neighbors) {
+      const id = reposts[i]?.id;
+      if (!id) continue;
+      const href = `https://www.tiktok.com/player/v1/${id}?autoplay=1&loop=1&mute=0&music_info=0&description=0&rel=0&native_context_menu=0&closed_caption=1`;
+      const link = document.createElement("link");
+      link.rel = "prefetch";
+      link.as = "document";
+      link.href = href;
+      link.crossOrigin = "anonymous";
+      document.head.appendChild(link);
+      links.push(link);
+    }
+    return () => {
+      for (const l of links) l.remove();
+    };
+  }, [index, reposts]);
 
   const goPrev = () => {
     if (index === null) return;
@@ -68,13 +141,6 @@ export function RepostPlayer({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repost, index]);
-
-  // Hide sound hint after first index change (= they've already engaged).
-  useEffect(() => {
-    if (!hint) return;
-    const t = setTimeout(() => setHint(false), 4000);
-    return () => clearTimeout(t);
-  }, [index, hint]);
 
   function onWheel(e: React.WheelEvent) {
     const now = Date.now();
@@ -138,6 +204,7 @@ export function RepostPlayer({
               {repost.id ? (
                 <>
                   <iframe
+                    ref={iframeRef}
                     key={repost.id}
                     src={`https://www.tiktok.com/player/v1/${repost.id}?autoplay=1&loop=1&mute=0&music_info=0&description=0&rel=0&native_context_menu=0&closed_caption=1`}
                     title={`Repost ${repost.id}`}
@@ -147,12 +214,18 @@ export function RepostPlayer({
                     className="h-full w-full border-0"
                     loading="eager"
                   />
-                  {hint && (
-                    <div className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 bg-black/70 backdrop-blur-md border border-white/15 rounded-full px-3.5 py-1.5 flex items-center gap-1.5 text-[12px] text-white/85">
+                  <button
+                    type="button"
+                    onClick={toggleMute}
+                    aria-label={muted ? "Unmute" : "Mute"}
+                    className="absolute bottom-3 right-3 h-8 w-8 rounded-full bg-black/60 border border-white/15 backdrop-blur-md text-white/85 hover:text-white hover:bg-black/80 transition-colors flex items-center justify-center"
+                  >
+                    {muted ? (
+                      <VolumeX className="h-3.5 w-3.5" />
+                    ) : (
                       <Volume2 className="h-3.5 w-3.5" />
-                      Click player to unmute
-                    </div>
-                  )}
+                    )}
+                  </button>
                 </>
               ) : (
                 <div className="flex flex-col items-center text-white/55 gap-2">
@@ -213,6 +286,34 @@ export function RepostPlayer({
                   <span className="text-white/45">No caption.</span>
                 )}
               </p>
+
+              {/* Repost timing. TikTok's anonymous endpoint usually does not
+                  expose the exact repost timestamp. When it does, show it.
+                  Otherwise fall back to feed position. */}
+              <div className="flex items-center gap-2 text-[11.5px] text-white/50">
+                {repost.repostedAt > 0 ? (
+                  <>
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#25f4ee]" />
+                    <span>
+                      Reposted{" "}
+                      <span className="text-white">
+                        {formatRelativeTime(repost.repostedAt)}
+                      </span>
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="h-1.5 w-1.5 rounded-full bg-white/30" />
+                    <span>
+                      Position{" "}
+                      <span className="text-white/80 tnum">
+                        #{(index ?? 0) + 1}
+                      </span>{" "}
+                      in their reposts
+                    </span>
+                  </>
+                )}
+              </div>
 
               <ul className="grid grid-cols-2 gap-3 text-[13px] text-white/65">
                 <li className="flex items-center gap-2">

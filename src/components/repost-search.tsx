@@ -14,6 +14,7 @@ import {
   BadgeCheck,
   Check,
   Eye,
+  Filter,
   Heart,
   Loader2,
   MessageCircle,
@@ -22,6 +23,7 @@ import {
   SlidersHorizontal,
   TriangleAlert,
   Users,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -345,6 +347,16 @@ function Results({
   aggregates: Aggregates | null;
 }) {
   const { profile, reposts, username } = data;
+  const [keywords, setKeywords] = useState<string[]>([]);
+
+  const filtered = useMemo(() => {
+    if (keywords.length === 0) return reposts;
+    const lc = keywords.map((k) => k.toLowerCase());
+    return reposts.filter((r) => {
+      const desc = (r.desc ?? "").toLowerCase();
+      return lc.some((k) => desc.includes(k));
+    });
+  }, [reposts, keywords]);
 
   if (reposts.length === 0) {
     return (
@@ -377,7 +389,144 @@ function Results({
         />
       )}
 
-      <RepostGrid reposts={reposts} />
+      <FilterBar
+        reposts={reposts}
+        keywords={keywords}
+        setKeywords={setKeywords}
+        matchedCount={filtered.length}
+      />
+
+      <RepostGrid reposts={filtered} totalAvailable={reposts.length} />
+    </div>
+  );
+}
+
+function FilterBar({
+  reposts,
+  keywords,
+  setKeywords,
+  matchedCount,
+}: {
+  reposts: Repost[];
+  keywords: string[];
+  setKeywords: (k: string[]) => void;
+  matchedCount: number;
+}) {
+  const [draft, setDraft] = useState("");
+
+  // Extract hashtags from captions, rank by frequency. Skip ones already on
+  // the active filter list.
+  const suggestions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of reposts) {
+      const desc = (r.desc ?? "").toLowerCase();
+      const tags = desc.match(/#[a-z0-9_]{2,24}/g) ?? [];
+      for (const t of tags) {
+        const k = t.slice(1);
+        counts.set(k, (counts.get(k) ?? 0) + 1);
+      }
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([t, n]) => ({ kw: t, count: n }));
+  }, [reposts]);
+
+  function add(raw: string) {
+    const k = raw.replace(/^#/, "").trim().toLowerCase();
+    if (!k) return;
+    if (keywords.includes(k)) return;
+    setKeywords([...keywords, k]);
+    setDraft("");
+  }
+
+  function remove(k: string) {
+    setKeywords(keywords.filter((x) => x !== k));
+  }
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 sm:p-5">
+      <div className="flex items-center justify-between gap-4 flex-wrap mb-3">
+        <div className="flex items-center gap-2 text-white/55">
+          <Filter className="h-3.5 w-3.5" />
+          <span className="text-[11px] font-medium uppercase tracking-[0.18em]">
+            Filter captions
+          </span>
+        </div>
+        {keywords.length > 0 && (
+          <span className="text-[11.5px] text-white/45">
+            <span className="text-white tnum">{matchedCount}</span> of{" "}
+            <span className="tnum">{reposts.length}</span> match
+            <button
+              type="button"
+              onClick={() => setKeywords([])}
+              className="ml-3 text-[11px] uppercase tracking-[0.18em] text-white/45 hover:text-white transition-colors"
+            >
+              Clear
+            </button>
+          </span>
+        )}
+      </div>
+
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          add(draft);
+        }}
+        className="flex items-center gap-2 flex-wrap rounded-xl bg-black/30 border border-white/10 focus-within:border-white/25 px-3 py-2"
+      >
+        {keywords.map((k) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => remove(k)}
+            className="group inline-flex items-center gap-1 text-[12.5px] font-medium tnum bg-[#25f4ee]/15 border border-[#25f4ee]/35 text-[#25f4ee] rounded-full pl-2 pr-1.5 py-0.5 transition-colors hover:bg-[#25f4ee]/25"
+          >
+            <span className="text-[#25f4ee]/55">#</span>
+            {k}
+            <X className="h-3 w-3 ml-0.5 opacity-65 group-hover:opacity-100" />
+          </button>
+        ))}
+        <span className="text-white/30 select-none">#</span>
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder={
+            keywords.length === 0 ? "type a word, hit enter" : "add another"
+          }
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
+          className="flex-1 min-w-[8rem] bg-transparent text-[14px] text-white placeholder:text-white/30 outline-none"
+        />
+      </form>
+
+      {suggestions.length > 0 && (
+        <div className="mt-3 flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] uppercase tracking-[0.18em] text-white/35">
+            Top tags
+          </span>
+          {suggestions
+            .filter((s) => !keywords.includes(s.kw))
+            .slice(0, 8)
+            .map((s) => (
+              <button
+                key={s.kw}
+                type="button"
+                onClick={() => add(s.kw)}
+                className="group inline-flex items-baseline gap-1 text-[12px] text-white/65 hover:text-white px-2 py-1 rounded-full bg-white/[0.025] border border-white/8 hover:border-white/25 transition-colors"
+              >
+                <span className="text-white/30 group-hover:text-[#25f4ee] transition-colors">
+                  #
+                </span>
+                {s.kw}
+                <span className="ml-0.5 text-white/30 text-[10.5px] tnum">
+                  {s.count}
+                </span>
+              </button>
+            ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -553,18 +702,35 @@ function TopCreators({
   );
 }
 
-function RepostGrid({ reposts }: { reposts: Repost[] }) {
+function RepostGrid({
+  reposts,
+  totalAvailable,
+}: {
+  reposts: Repost[];
+  totalAvailable?: number;
+}) {
   const [playingIndex, setPlayingIndex] = useState<number | null>(null);
+  const showing = reposts.length;
+  const total = totalAvailable ?? showing;
+  const filtered = total > showing;
   return (
     <div>
       <div className="flex items-baseline justify-between mb-4">
         <p className="text-[11px] uppercase tracking-[0.22em] text-white/55">
-          Reel · {reposts.length} item{reposts.length === 1 ? "" : "s"}
+          Reel · {filtered ? `${showing} of ${total} items` : `${showing} item${showing === 1 ? "" : "s"}`}
         </p>
         <p className="text-[11px] uppercase tracking-[0.18em] text-white/40">
           By recency · click to play · scroll / arrows to navigate
         </p>
       </div>
+
+      {reposts.length === 0 && (
+        <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-10 text-center">
+          <p className="text-[14px] text-white/65">
+            No reposts match your filter. Clear it to see them all.
+          </p>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {reposts.map((r, i) => (
           <motion.div
