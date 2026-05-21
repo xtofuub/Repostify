@@ -513,8 +513,13 @@ function FilterBar({
           autoCapitalize="none"
           autoCorrect="off"
           spellCheck={false}
-          style={{ color: "#ffffff", WebkitTextFillColor: "#ffffff" }}
-          className="flex-1 min-w-[6rem] bg-transparent text-[14px] text-white placeholder:text-white/30 outline-none caret-[#25f4ee] [color-scheme:dark]"
+          style={{
+            color: "#ffffff",
+            WebkitTextFillColor: "#ffffff",
+            colorScheme: "dark",
+            caretColor: "#25f4ee",
+          }}
+          className="flex-1 min-w-[6rem] bg-transparent text-[14px] outline-none"
         />
       </form>
 

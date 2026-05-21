@@ -57,6 +57,17 @@
   * {
     border-color: var(--color-border);
   }
+  /* Force inputs to render with white text on the dark canvas. Without
+     color-scheme: dark, some browsers paint typed input text using the
+     light-mode default (black on a custom dark background = invisible). */
+  html {
+    color-scheme: dark;
+  }
+  input,
+  textarea {
+    color: inherit;
+    -webkit-text-fill-color: inherit;
+  }
   .font-display {
     font-family: var(--font-display);
     letter-spacing: -0.01em;
