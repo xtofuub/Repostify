@@ -300,7 +300,7 @@ function LimitMenu({
           onClick={(e) => e.stopPropagation()}
           className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[11rem] rounded-xl border border-white/10 bg-[#101012] shadow-[0_24px_60px_rgba(0,0,0,0.6)] overflow-hidden py-1"
         >
-          <p className="px-3 pt-2 pb-1.5 text-[9.5px] uppercase tracking-[0.22em] text-white/35 whitespace-nowrap">
+          <p className="px-3 pt-2.5 pb-2 text-[11px] font-medium uppercase tracking-[0.18em] text-white/55 whitespace-nowrap">
             Fetch limit
           </p>
           {LIMIT_OPTIONS.map((m) => {
