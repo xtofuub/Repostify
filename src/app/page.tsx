@@ -161,40 +161,83 @@ function Hero() {
 }
 
 function PopularHandles() {
+  const featured = POPULAR_HANDLES.slice(0, 12);
+  // Cycle accent colors so the grid feels alive, not stamped.
+  const accents = [
+    "from-[#25f4ee] to-[#0ea5b3]",
+    "from-[#ff2d8a] to-[#c11a64]",
+    "from-[#f5b740] to-[#c98a1a]",
+    "from-[#9b6cff] to-[#5e3ec0]",
+    "from-[#36d399] to-[#1f8a64]",
+    "from-[#ff7a59] to-[#c54a2d]",
+  ];
+
   return (
-    <section className="relative py-16 md:py-20 border-t border-white/8">
+    <section className="relative py-16 md:py-24 border-t border-white/8">
       <div className="max-w-[72rem] mx-auto px-6">
-        <div className="grid grid-cols-12 gap-x-6 gap-y-8 items-start">
-          <div className="col-span-12 md:col-span-4">
-            <SectionLabel>Popular handles</SectionLabel>
-            <h2 className="mt-6 font-display text-[clamp(1.8rem,3.6vw,2.8rem)] leading-[0.95] tracking-[-0.015em]">
-              Skip the paste.{" "}
-              <span className="italic text-white/55">One click to a profile.</span>
-            </h2>
-            <p className="mt-4 text-[13.5px] leading-[1.65] text-white/60 max-w-[44ch]">
-              A handful of large public accounts whose reposts tab is open.
-              Click through to a pre-loaded result page.
-            </p>
-          </div>
-          <ul className="col-span-12 md:col-span-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-            {POPULAR_HANDLES.map((h) => (
+        <div className="max-w-[44rem]">
+          <SectionLabel>Popular handles</SectionLabel>
+          <h2 className="mt-5 font-display text-[clamp(2rem,4vw,3.25rem)] leading-[0.95] tracking-[-0.02em]">
+            Skip the paste.{" "}
+            <span className="italic text-white/55">
+              One click to a profile.
+            </span>
+          </h2>
+          <p className="mt-5 text-[14.5px] leading-[1.65] text-white/60 max-w-[56ch]">
+            Public TikTok accounts with the reposts tab visible. Tap any card
+            — the scrape runs the moment the page loads.
+          </p>
+        </div>
+
+        <ul className="mt-10 md:mt-12 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          {featured.map((h, i) => {
+            const accent = accents[i % accents.length];
+            const initials = h.replace(/[^a-z0-9]/gi, "").slice(0, 2).toUpperCase();
+            return (
               <li key={h}>
                 <Link
                   href={`/u/${h}`}
-                  className="block rounded-xl border border-white/10 bg-white/[0.015] hover:bg-white/[0.04] hover:border-white/25 transition-colors px-4 py-3"
+                  className="group relative block rounded-2xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/25 transition-all duration-300 p-4 overflow-hidden"
                 >
-                  <p className="text-[14px] font-medium">
-                    <span className="text-white/45">@</span>
-                    {h}
-                  </p>
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-white/40 mt-1">
-                    View reposts
-                  </p>
+                  {/* Soft accent glow on hover */}
+                  <div
+                    className={`absolute -top-12 -right-12 h-28 w-28 rounded-full bg-gradient-to-br ${accent} opacity-0 group-hover:opacity-25 blur-2xl transition-opacity duration-500 pointer-events-none`}
+                  />
+                  <div className="relative flex items-center gap-3">
+                    <div
+                      className={`flex-none h-11 w-11 rounded-full bg-gradient-to-br ${accent} flex items-center justify-center font-display text-[15px] text-black/85 tracking-tight`}
+                    >
+                      {initials}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[14px] font-medium truncate">
+                        <span className="text-white/40">@</span>
+                        {h}
+                      </p>
+                      <p className="text-[10.5px] uppercase tracking-[0.22em] text-white/40 mt-0.5">
+                        Reposts open
+                      </p>
+                    </div>
+                    <ArrowUpRight className="ml-auto h-4 w-4 text-white/35 group-hover:text-white group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" />
+                  </div>
                 </Link>
               </li>
-            ))}
-          </ul>
-        </div>
+            );
+          })}
+        </ul>
+
+        {POPULAR_HANDLES.length > featured.length && (
+          <p className="mt-8 text-[12.5px] text-white/45">
+            {POPULAR_HANDLES.length - featured.length} more in the{" "}
+            <Link
+              href="/sitemap.xml"
+              className="underline underline-offset-4 hover:text-white"
+            >
+              sitemap
+            </Link>
+            . Or just paste any handle.
+          </p>
+        )}
       </div>
     </section>
   );
