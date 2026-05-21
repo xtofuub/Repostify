@@ -254,16 +254,19 @@ function LimitMenu({
 
   useEffect(() => {
     if (!open) return;
-    const onClick = (e: MouseEvent) => {
+    // Use the `click` phase, not `mousedown`. Mousedown fires before React
+    // syncs button click handlers; using click instead avoids racing with
+    // the trigger's own onClick.
+    const onDocClick = (e: MouseEvent) => {
       if (!wrapperRef.current?.contains(e.target as Node)) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
     };
-    document.addEventListener("mousedown", onClick);
+    document.addEventListener("click", onDocClick);
     document.addEventListener("keydown", onKey);
     return () => {
-      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("click", onDocClick);
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
@@ -271,15 +274,18 @@ function LimitMenu({
   const label = value === 0 ? "All" : String(value);
 
   return (
-    <div ref={wrapperRef} className="relative flex-none">
+    <div ref={wrapperRef} className="relative flex-none z-20">
       <button
         type="button"
         disabled={disabled}
-        onClick={() => setOpen((o) => !o)}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((o) => !o);
+        }}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`Fetch limit: ${label === "All" ? "every repost" : `${label} reposts`}`}
-        className="h-9 inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] hover:border-white/20 px-2.5 text-white/75 hover:text-white transition-colors disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-[#25f4ee]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b]"
+        className="h-9 inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] hover:border-white/20 px-2.5 text-white/75 hover:text-white transition-colors disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-[#25f4ee]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b] cursor-pointer"
       >
         <SlidersHorizontal className="h-3.5 w-3.5 text-white/60" />
         <span className="text-[12.5px] font-medium tnum tracking-tight">
@@ -290,60 +296,41 @@ function LimitMenu({
       {open && (
         <div
           role="menu"
-          aria-label="Fetch limit options"
-          className="absolute right-0 top-[calc(100%+0.5rem)] z-40 w-60 rounded-xl border border-white/10 bg-[#101012] shadow-[0_24px_60px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.02)] overflow-hidden"
+          aria-label="Fetch limit"
+          onClick={(e) => e.stopPropagation()}
+          className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[11rem] rounded-xl border border-white/10 bg-[#101012] shadow-[0_24px_60px_rgba(0,0,0,0.6)] overflow-hidden py-1"
         >
-          <div className="px-3.5 pt-3 pb-2 border-b border-white/8">
-            <p className="text-[10px] uppercase tracking-[0.22em] text-white/40">
-              Fetch limit
-            </p>
-            <p className="mt-1 text-[12px] text-white/55 leading-[1.5]">
-              How many reposts to pull. Smaller = faster.
-            </p>
-          </div>
-          <ul className="py-1">
-            {LIMIT_OPTIONS.map((m) => {
-              const active = m === value;
-              const big = m === 0;
-              return (
-                <li key={m}>
-                  <button
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={active}
-                    onClick={() => {
-                      onChange(m);
-                      setOpen(false);
-                    }}
-                    className={`w-full px-3.5 py-2 flex items-baseline justify-between gap-3 text-left transition-colors outline-none focus-visible:bg-white/[0.05] ${
-                      active
-                        ? "bg-white/[0.04] text-white"
-                        : "text-white/70 hover:bg-white/[0.03] hover:text-white"
-                    }`}
-                  >
-                    <span className="inline-flex items-baseline gap-2">
-                      <span
-                        className={`font-display text-[16px] tnum tracking-tight ${
-                          active ? "text-white" : "text-white/85"
-                        }`}
-                      >
-                        {big ? "All" : m}
-                      </span>
-                      <span className="text-[11.5px] text-white/45">
-                        {big ? "every repost" : "reposts"}
-                      </span>
-                    </span>
-                    {active && (
-                      <Check className="h-3.5 w-3.5 text-[#25f4ee] self-center" />
-                    )}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-          <div className="px-3.5 py-2 border-t border-white/8 text-[10.5px] text-white/40 leading-[1.5]">
-            Larger feeds take longer. Cancel by reloading.
-          </div>
+          <p className="px-3 pt-2 pb-1.5 text-[9.5px] uppercase tracking-[0.22em] text-white/35 whitespace-nowrap">
+            Fetch limit
+          </p>
+          {LIMIT_OPTIONS.map((m) => {
+            const active = m === value;
+            return (
+              <button
+                key={m}
+                type="button"
+                role="menuitemradio"
+                aria-checked={active}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onChange(m);
+                  setOpen(false);
+                }}
+                className={`w-full px-3 h-9 flex items-center justify-between gap-4 text-left transition-colors outline-none focus-visible:bg-white/[0.05] cursor-pointer ${
+                  active
+                    ? "bg-white/[0.04] text-white"
+                    : "text-white/70 hover:bg-white/[0.03] hover:text-white"
+                }`}
+              >
+                <span className="text-[13.5px] font-medium tnum">
+                  {m === 0 ? "All" : m}
+                </span>
+                {active && (
+                  <Check className="h-3.5 w-3.5 text-[#25f4ee] flex-none" />
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
