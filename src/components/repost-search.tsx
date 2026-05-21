@@ -204,20 +204,37 @@ function SearchPanel({
     <div className="glass-strong rounded-3xl p-3 sm:p-4 max-w-[42rem] mx-auto">
       <form
         onSubmit={onSubmit}
-        className="flex items-center gap-2 rounded-2xl bg-black/30 border border-white/10 px-3 sm:px-4 h-14 sm:h-16"
+        className="flex items-center gap-3 rounded-2xl bg-black/30 border border-white/10 px-4 sm:px-5 h-14 sm:h-16 focus-within:border-white/25 transition-colors"
       >
-        <Search className="h-4 w-4 text-white/45 flex-none" />
-        <span className="text-white/40 select-none">@</span>
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="paste a tiktok handle"
-          autoCapitalize="none"
-          autoCorrect="off"
-          spellCheck={false}
-          disabled={loading}
-          className="flex-1 bg-transparent text-[15px] sm:text-base text-white placeholder:text-white/35 outline-none disabled:opacity-60"
-        />
+        <Search className="h-4 w-4 text-white/35 flex-none" />
+        <label
+          className={`relative flex-1 flex items-center text-[15px] sm:text-base leading-none ${
+            loading ? "opacity-60" : ""
+          }`}
+        >
+          {/* @ sits flush against the input so caret-side starts right after.
+              Same size, same baseline, single-unit feel. */}
+          <span aria-hidden className="text-white/40 select-none tabular-nums">
+            @
+          </span>
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value.replace(/^@+/, ""))}
+            placeholder="username"
+            aria-label="TikTok username"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            disabled={loading}
+            className="flex-1 ml-0.5 bg-transparent outline-none placeholder:text-white/30"
+            style={{
+              color: "#ffffff",
+              WebkitTextFillColor: "#ffffff",
+              colorScheme: "dark",
+              caretColor: "#25f4ee",
+            }}
+          />
+        </label>
         <LimitMenu value={limit} onChange={setLimit} disabled={loading} />
         <PrimaryButton
           type="submit"
