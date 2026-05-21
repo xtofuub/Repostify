@@ -278,6 +278,16 @@ export async function scrapeReposts(
     }
     try {
       const json = await res.json();
+      // Dump first XHR response when DEBUG is on so we can inspect what
+      // timestamp fields TikTok actually exposes per item.
+      if (DEBUG && repostXhrSeen === 1) {
+        const dir = join(process.cwd(), ".debug");
+        await mkdir(dir, { recursive: true }).catch(() => {});
+        await writeFile(
+          join(dir, `xhr-${username}-${Date.now()}.json`),
+          JSON.stringify(json, null, 2),
+        ).catch(() => {});
+      }
       ingest(json);
     } catch {}
   });
