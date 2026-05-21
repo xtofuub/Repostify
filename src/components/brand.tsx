@@ -9,29 +9,21 @@ export function LogoMark({ className }: { className?: string }) {
       aria-hidden
       className={cn("w-7 h-7", className)}
     >
-      <defs>
-        <linearGradient id="rs-mark-grad" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#25f4ee" />
-          <stop offset="100%" stopColor="#ff2d8a" />
-        </linearGradient>
-      </defs>
-      <circle cx="16" cy="16" r="14" stroke="url(#rs-mark-grad)" strokeWidth="2" fill="none" />
-      <path
-        d="M10 12.5 a6 6 0 0 1 12 0 v3.5"
-        stroke="white"
-        strokeWidth="2"
-        strokeLinecap="round"
-        fill="none"
-      />
-      <path d="M19 13 l3 3 l3 -3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-      <path
-        d="M22 19.5 a6 6 0 0 1 -12 0 v-3.5"
-        stroke="white"
-        strokeWidth="2"
-        strokeLinecap="round"
-        fill="none"
-      />
-      <path d="M13 19 l-3 -3 l-3 3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <rect width="32" height="32" rx="6" fill="#0f0f10" />
+      <text
+        x="16"
+        y="23"
+        textAnchor="middle"
+        fontFamily="Georgia, 'Times New Roman', serif"
+        fontStyle="italic"
+        fontWeight="500"
+        fontSize="22"
+        fill="#ffffff"
+        letterSpacing="-0.5"
+      >
+        R
+      </text>
+      <rect x="22" y="20" width="3" height="3" fill="#25f4ee" />
     </svg>
   );
 }
