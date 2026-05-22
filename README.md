@@ -1,54 +1,99 @@
-# Repostify
+<h1 align="center">Repostify</h1>
 
-**A read-only TikTok repost analyzer.**  
-Open any public profile, crawl the reposts tab, and view every repost as a playable grid with aggregate stats, top-creator rankings, and an in-browser video player. No login. No API key. Nothing stored server-side.
+<p align="center">
+  <strong>See every TikTok repost on any public profile.</strong><br/>
+  No login. No API key. No notification to the account you're checking.
+</p>
+
+<p align="center">
+  <img src=".github/assets/01-home.png" alt="Repostify landing page" width="900" />
+</p>
 
 ---
 
-## Why
+## What it does
 
-TikTok's reposts tab is a high-signal feed: every video an account chose to amplify to its own followers. But scrolling it in the app is slow, videos auto-play one at a time, and there's no aggregate view of who the account actually boosts. Repostify flattens the feed into a single page — playable thumbnails, summed engagement, ranked creators.
+Paste any public TikTok handle → Repostify opens the profile as an anonymous visitor, walks the reposts tab, and lays every repost out as a playable grid with stats, top-amplified creators, and one-click in-browser video playback.
+
+The reposts tab is where someone's taste actually lives. Likes are noise. Posts are performance. Reposts are what they wanted their followers to see. This tool flattens that feed into a single page you can scan in seconds.
+
+## Screenshots
+
+### Result page
+
+Per-profile view: header, full stats row, top-creators leaderboard, repost grid.
+
+<p align="center">
+  <img src=".github/assets/03-result.png" alt="Result page for @khaby.lame" width="900" />
+</p>
+
+### Top creators ranking
+
+Counts how many times each original creator appears in the feed, ranked.
+
+<p align="center">
+  <img src=".github/assets/05-top-creators.png" alt="Top amplified creators" width="900" />
+</p>
+
+### Inline player
+
+Click any cover → full-screen overlay with TikTok's embed player + caption, stats, position counter, and prev/next nav.
+
+<p align="center">
+  <img src=".github/assets/07-player.png" alt="Inline TikTok player" width="900" />
+</p>
+
+### Mobile
+
+<p align="center">
+  <img src=".github/assets/08-mobile.png" alt="Mobile view" width="320" />
+</p>
+
+---
 
 ## Features
 
-- **Profile overview** — Avatar, bio, follower/following/hearts counts pulled from the public page.
-- **Repost grid** — 9:16 cover images with play overlay, duration badge, author info, and engagement stats (plays, likes, comments, shares).
-- **In-browser player** — Click any cover to open a full-screen overlay with TikTok's embed player and a detail panel.
-- **Aggregate stats** — Total plays, likes, comments, shares, and unique creators across the batch.
-- **Top creators ranking** — Counts how often each creator appears and ranks by frequency with horizontal bar charts.
-- **Bot-detection bypass** — cloakbrowser's source-level Chromium patches pass TikTok fingerprinting where stock Playwright hits a captcha wall at ~30 items.
-- **Fetch-limit chips** — Pick 30 / 60 / 120 / 250 / All in the UI; the scraper stops early at your cap.
-- **Image proxy** — TikTok blocks hotlinks; every thumbnail and avatar routes through a server-side proxy with the correct Referer header.
-- **SEO-ready** — Dynamic metadata, JSON-LD structured data (FAQPage, WebApplication, BreadcrumbList, Article), sitemap with popular handles, robots.txt.
+- **Profile overview** — Avatar, bio, follower / following / hearts pulled from the public page rehydration script.
+- **Repost grid** — 9:16 cover thumbnails with duration badge, original creator handle, play overlay, and per-video engagement stats.
+- **Inline player** — TikTok embed iframe + detail panel. Scroll wheel, arrow keys, j/k, or the buttons to navigate.
+- **Aggregate stats** — Total plays, likes, comments, shares, and unique creators across the captured batch.
+- **Top creators leaderboard** — Frequency-ranked list of every original creator with horizontal bar chart.
+- **Caption filter** — Type a word (`fyp`, `lol`, `edit`) to filter the grid live. Toggle between fuzzy substring and exact-word match. Top extracted hashtags suggested.
+- **Fetch-limit selector** — Hidden in a popover behind the search bar gear: 30 / 60 / 120 / 250 / All.
+- **Bot-detection bypass** — Uses [cloakbrowser](https://github.com/CloakHQ/CloakBrowser) (stealth Chromium with source-level C++ fingerprint patches) instead of stock Playwright, so TikTok serves the full repost feed instead of cutting off at the captcha gate.
+- **Direct-cursor pagination** — After the first XHR fires, subsequent pages are fetched via the captured URL template, not by scrolling. Roughly 35% faster on big feeds.
+- **In-memory result cache** — 10 min TTL per `(handle, limit)`. Repeat lookups instant.
+- **Image proxy** — TikTok blocks hotlinks; all thumbnails route through `/api/img` with the Referer header set.
+- **SEO** — Dynamic per-handle metadata, JSON-LD (`WebApplication`, `FAQPage`, `BreadcrumbList`, `Article`), sitemap with curated popular handles, `robots.txt`.
 
-## How it works
+## How the scraper works
 
-1. [cloakbrowser](https://github.com/CloakHQ/CloakBrowser) (stealth Chromium with source-level C++ fingerprint patches) loads the public profile.
-2. Cookie banner dismissed via shadow DOM.
-3. Profile data extracted from `__UNIVERSAL_DATA_FOR_REHYDRATION__` SSR script.
-4. Reposts tab located + clicked.
-5. `/api/repost/item_list` XHR responses intercepted as they arrive.
-6. Page scrolled until TikTok returns `hasMore: false` or the user-selected limit is hit.
-7. Tab-error / captcha / blocked-response signals cause early bail.
-8. Results normalized, deduplicated, sorted by recency.
+1. Cloakbrowser launches a stealth Chromium (binary-level fingerprint patches, undetectable as automation).
+2. Navigates to `https://www.tiktok.com/@<handle>`.
+3. Dismisses the cookie banner via shadow-DOM traversal.
+4. Parses `__UNIVERSAL_DATA_FOR_REHYDRATION__` for profile + initial repost list.
+5. Finds the Reposts tab by `role="tab"` text match, clicks it.
+6. Captures the first `/api/repost/item_list/` XHR as a URL template.
+7. Paginates: each subsequent call hits the same URL with an updated cursor via `page.evaluate(fetch)` (TikTok's own fetch interceptor signs the request).
+8. Detects captcha / private-tab / server-block signals, bails fast.
+9. Normalizes, dedupes, sorts by recency.
 
-No login. No undocumented API. Nothing stored server-side.
+No login. No undocumented API. The data is everything TikTok would show any anonymous visitor.
 
 ## Tech stack
 
-| Layer | Choice |
-|---|---|
-| Framework | [Next.js](https://nextjs.org) 16.2.6 |
-| Runtime | React 19.2.4 with React Compiler |
-| Styling | Tailwind CSS v4 |
-| Primitives | [@base-ui/react](https://base-ui.com) 1.4.1 (MUI team's new headless library) |
-| Components | shadcn (base-nova style) |
-| Animation | motion 12.38 |
-| Scraping | [cloakbrowser](https://github.com/CloakHQ/CloakBrowser) 0.3.28 (stealth Chromium, drop-in Playwright API) |
-| Icons | lucide-react |
-| Fonts | Inter + Instrument Serif (via next/font) |
-| Language | TypeScript 5 |
-| Package manager | pnpm |
+| Layer            | Choice                                                                                       |
+| ---------------- | -------------------------------------------------------------------------------------------- |
+| Framework        | [Next.js](https://nextjs.org) 16.2.6 (App Router, Turbopack, React Compiler)                 |
+| Runtime          | React 19                                                                                     |
+| Styling          | Tailwind CSS v4 with `@theme inline`                                                         |
+| Components       | shadcn/ui                                                                                    |
+| Animation        | motion (Framer Motion v12)                                                                   |
+| Scraping         | [cloakbrowser](https://github.com/CloakHQ/CloakBrowser) (stealth Chromium, Playwright API)   |
+| Icons            | lucide-react                                                                                 |
+| Fonts            | Inter + Instrument Serif (via `next/font`)                                                   |
+| Language         | TypeScript 5                                                                                 |
+| Package manager  | pnpm                                                                                         |
 
 ## Getting started
 
@@ -57,9 +102,9 @@ pnpm install
 pnpm dev
 ```
 
-First run downloads the cloakbrowser binary (~200MB, cached in `~/.cloakbrowser/`).
+First boot downloads the cloakbrowser binary (~200 MB, cached in `~/.cloakbrowser/`).
 
-Open [http://localhost:3000](http://localhost:3000). Paste a handle. Pick a fetch limit (30 / 60 / 120 / 250 / All). Hit Analyze.
+Open [http://localhost:3000](http://localhost:3000). Paste a handle, pick a fetch limit, hit Analyze.
 
 ### Production build
 
@@ -70,37 +115,11 @@ pnpm start
 
 ### Debug mode
 
-Set `DEBUG_TIKTOK=1` to dump HTML screenshots and debug metadata into `.debug/` on each scrape.
-
-## Project structure
-
+```bash
+DEBUG_TIKTOK=1 pnpm dev
 ```
-src/
-├── app/
-│   ├── page.tsx            # Home — hero, search, popular handles, FAQ
-│   ├── layout.tsx          # Root layout, fonts, global CSS, Toaster
-│   ├── u/[username]/       # Dynamic profile page with auto-search
-│   ├── about/              # About page
-│   ├── guide/              # Educational guide on TikTok reposts
-│   ├── privacy/            # Privacy policy
-│   ├── sitemap.ts          # Static + popular-handle routes
-│   ├── robots.ts           # Disallows /api/
-│   └── api/
-│       ├── reposts/        # GET /api/reposts?username= — runs the scraper (120s timeout)
-│       ├── img/            # Image proxy (24h cache, domain-whitelisted)
-│       └── video/          # Video proxy (5min cache, byte-range support)
-├── components/
-│   ├── repost-search.tsx   # Main client component — state machine (idle|loading|error|ok)
-│   ├── repost-card.tsx     # Single repost thumbnail in the grid
-│   ├── repost-player.tsx   # Full-screen overlay with TikTok embed + detail panel
-│   ├── brand.tsx           # LogoMark, PrimaryButton, GhostButton, GuideLines, BackgroundVideo
-│   └── ui/                 # shadcn primitives (button, card, input, badge, avatar, tabs, etc.)
-└── lib/
-    ├── tiktok.ts           # Playwright scraper — the core logic (~500 lines)
-    ├── seo.ts              # Site constants, canonical URL builder, popular handles list
-    ├── format.ts           # formatCount, formatDuration, formatRelativeTime
-    └── utils.ts            # cn() utility
-```
+
+Dumps the raw first XHR response, full page HTML, and a viewport screenshot into `.debug/` for each scrape.
 
 ## API
 
@@ -108,15 +127,60 @@ src/
 GET /api/reposts?username=<handle>&limit=<n>
 ```
 
-- `username` — required, TikTok handle without `@`
-- `limit` — optional, max items. Omit or `0` for no cap.
+| Param      | Notes                                                |
+| ---------- | ---------------------------------------------------- |
+| `username` | Required. TikTok handle without `@`.                 |
+| `limit`    | Optional integer. Omit or `0` = no cap. Max 2000.    |
+
+Returns:
+
+```ts
+{
+  username: string;
+  profile: { nickname, avatar, verified, bio, followers, following, likes } | null;
+  reposts: Repost[];
+  hasMore: boolean;
+  captchaSuspected: boolean;
+  fetchedAt: number;
+}
+```
+
+## Project layout
+
+```
+src/
+├── app/
+│   ├── page.tsx              # Home: hero + search + FAQ + CTA
+│   ├── u/[username]/         # Per-handle result page (auto-scrapes on load)
+│   ├── about/, guide/, privacy/
+│   ├── api/
+│   │   ├── reposts/          # GET /api/reposts (the scraper endpoint)
+│   │   ├── img/              # Image proxy (24 h cache, domain-whitelisted)
+│   │   └── video/            # Video proxy fallback (mostly unused)
+│   ├── sitemap.ts            # Static routes + popular handles
+│   └── robots.ts             # Disallows /api/
+├── components/
+│   ├── repost-search.tsx     # Main client component: state machine + UI
+│   ├── repost-card.tsx       # Thumbnail card
+│   ├── repost-player.tsx     # Full-screen overlay player
+│   ├── brand.tsx             # LogoMark, PrimaryButton, GuideLines, BackgroundVideo
+│   └── ui/                   # shadcn primitives
+├── lib/
+│   ├── tiktok.ts             # Scraper core (~700 lines)
+│   ├── seo.ts                # Site constants + popular-handle list
+│   ├── format.ts             # Number / time formatters
+│   └── utils.ts              # cn()
+└── instrumentation.ts        # Next.js boot hook: pre-warms cloakbrowser
+```
 
 ## Limitations
 
-- **Private reposts tabs** — Many profiles hide their reposts tab. TikTok privacy setting, can't bypass.
-- **Big feeds = slow** — 250+ items can take 1-3 min. Use a tight limit if you only need recent.
-- **Read-only** — No write ops, no logged-in sessions.
+- **Private reposts tabs** — Many accounts hide it. That's a TikTok setting; can't bypass without auth.
+- **Repost timestamps** — TikTok's anonymous endpoint exposes only the original video's createTime, not when the user reposted it. Order in the feed (most-recent-first) is the only repost-recency signal.
+- **Big feeds are slow** — 500+ items can take 2-3 min. TikTok server is the bottleneck. Pick a smaller fetch limit if you only need the recent.
+- **Read-only** — No write ops, no logged-in sessions, no DM-anyone weirdness.
+- **Vercel won't run this** — Needs persistent server (cloakbrowser binary launch). Render, Fly, Railway, VPS all work.
 
 ## License
 
-MIT. Not affiliated with TikTok or ByteDance.
+MIT. Not affiliated with or endorsed by TikTok or ByteDance.
