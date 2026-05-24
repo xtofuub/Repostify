@@ -76,7 +76,10 @@ export default function RootLayout({
       lang="en"
       className={`${inter.variable} ${instrument.variable} h-full antialiased`}
     >
-      <body className="min-h-full bg-[#0a0a0b] text-white font-sans">
+      <body
+        className="min-h-full bg-[#0a0a0b] text-white font-sans"
+        suppressHydrationWarning
+      >
         {children}
         <Toaster theme="dark" position="top-center" richColors />
       </body>
