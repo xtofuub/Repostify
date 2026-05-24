@@ -3,12 +3,12 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Repost, ScrapeResult } from "@/lib/tiktok";
 
-// Durable subset of Repost — we strip `cover` and `playUrl` because TikTok
-// signs them with x-expires tokens (~6-24h lifetime). Stale URLs render as
-// broken images. RepostCard already falls back to a Play-icon placeholder
-// when `cover` is empty, and RepostPlayer uses TikTok's /embed/{id} iframe
-// rather than our cached playUrl, so removing both is safe.
-type StoredRepost = Omit<Repost, "cover" | "playUrl">;
+// Store the full Repost JSON (including cover + playUrl). TikTok signs media
+// URLs with `x-expires` (~6-24h). Stale URLs render as broken images, which
+// is acceptable — RepostCard fades them out via onError and the player iframe
+// doesn't depend on cached URLs. Each background refresh overwrites the JSON,
+// so URLs stay live within a few minutes of any user activity.
+type StoredRepost = Repost;
 
 type ProfileRow = NonNullable<ScrapeResult["profile"]>;
 
@@ -44,23 +44,8 @@ function open(): Database.Database {
   return db;
 }
 
-function stripExpiringUrls(r: Repost): StoredRepost {
-  // Avoid Omit-via-destructure since unused locals trip lint
-  const stripped: StoredRepost = {
-    id: r.id,
-    desc: r.desc,
-    createTime: r.createTime,
-    repostedAt: r.repostedAt,
-    duration: r.duration,
-    author: r.author,
-    stats: r.stats,
-    webUrl: r.webUrl,
-  };
-  return stripped;
-}
-
 function rehydrate(row: StoredRepost): Repost {
-  return { ...row, cover: "", playUrl: "" };
+  return row;
 }
 
 export function getCachedProfile(username: string): {
@@ -158,7 +143,7 @@ export function upsertReposts(
     // (= top of result when ORDER BY position ASC).
     for (let i = items.length - 1; i >= 0; i--) {
       const item = items[i];
-      const stored = JSON.stringify(stripExpiringUrls(item));
+      const stored = JSON.stringify(item satisfies StoredRepost);
       if (existing.has(item.id)) {
         update.run(stored, now, owner, item.id);
         updated++;

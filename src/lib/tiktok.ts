@@ -255,10 +255,6 @@ async function dumpDebug(name: string, html: string, png: Buffer) {
   await writeFile(join(dir, `${name}.png`), png).catch(() => {});
 }
 
-type CacheEntry = { at: number; result: ScrapeResult };
-const cache = new Map<string, CacheEntry>();
-const CACHE_TTL_MS = 10 * 60 * 1000; // 10 min
-
 const SESSION_PATH = join(process.cwd(), ".tiktok-session.json");
 type StorageState = NonNullable<BrowserContextOptions["storageState"]>;
 
@@ -283,6 +279,54 @@ function loadStorageState(): StorageState | undefined {
   }
 }
 
+// Dedupe concurrent background refreshes per (auth-mode, username).
+const inFlightRefresh = new Map<string, Promise<void>>();
+function refreshKey(username: string, loggedIn: boolean): string {
+  return `${loggedIn ? "auth" : "anon"}:${username.toLowerCase()}`;
+}
+function scheduleBackgroundRefresh(username: string, loggedIn: boolean): void {
+  const key = refreshKey(username, loggedIn);
+  if (inFlightRefresh.has(key)) return;
+  const p = (async () => {
+    try {
+      // bypassCache=true forces real scrape. maxScrolls capped low so a
+      // background refresh only walks ~3 pages — just enough to catch new
+      // reposts at the top. Full backfill happens on the cold first scrape.
+      await scrapeReposts(username, {
+        bypassCache: true,
+        maxScrolls: 3,
+        maxItems: 90,
+      });
+    } catch {
+      // Background failure stays silent; next user request retries.
+    } finally {
+      inFlightRefresh.delete(key);
+    }
+  })();
+  inFlightRefresh.set(key, p);
+}
+
+function buildResultFromCache(
+  username: string,
+  reposts: Repost[],
+  loggedIn: boolean,
+  fetchedAt: number,
+): ScrapeResult {
+  const profile = getCachedProfile(username)?.profile ?? null;
+  return {
+    username,
+    profile,
+    reposts,
+    hasMore: false,
+    captchaSuspected: false,
+    audienceRestricted: false,
+    rateLimited: false,
+    tabError: false,
+    loggedIn,
+    fetchedAt,
+  };
+}
+
 export async function scrapeReposts(
   rawUsername: string,
   opts: { maxScrolls?: number; timeoutMs?: number; maxItems?: number; bypassCache?: boolean } = {},
@@ -297,16 +341,26 @@ export async function scrapeReposts(
   const timeoutMs = opts.timeoutMs ?? 30_000;
   const maxItems = opts.maxItems ?? Infinity;
 
-  // Probe storageState first — cache must partition on auth state, otherwise
-  // an anonymous result poisons the cache for a later logged-in request.
   const storageState = loadStorageState();
   const loggedIn = storageState !== undefined;
 
-  const cacheKey = `${loggedIn ? "auth" : "anon"}:${username.toLowerCase()}:${Number.isFinite(maxItems) ? maxItems : "all"}`;
+  // Stale-while-revalidate: when the DB already has reposts for this user,
+  // return them instantly and fire a background refresh so the next request
+  // sees fresher data + URLs. Skip when bypassCache is set (background
+  // refresh path, the compare page's force-refresh path, etc.).
   if (!opts.bypassCache) {
-    const hit = cache.get(cacheKey);
-    if (hit && Date.now() - hit.at < CACHE_TTL_MS) {
-      return hit.result;
+    const cached = getCachedReposts(username);
+    if (cached.length > 0) {
+      const cachedProfileRow = getCachedProfile(username);
+      scheduleBackgroundRefresh(username, loggedIn);
+      const trimmed =
+        cached.length > maxItems ? cached.slice(0, maxItems) : cached;
+      return buildResultFromCache(
+        username,
+        trimmed,
+        loggedIn,
+        cachedProfileRow?.fetchedAt ?? Date.now(),
+      );
     }
   }
 
@@ -875,12 +929,6 @@ export async function scrapeReposts(
       repostTabFound,
       rehydratedItems,
     };
-  }
-
-  // In-memory hot cache stays as a request-coalescing layer; SQLite is the
-  // durable backing store.
-  if (!captchaSuspected && merged.length > 0) {
-    cache.set(cacheKey, { at: Date.now(), result });
   }
 
   return result;

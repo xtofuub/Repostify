@@ -23,7 +23,6 @@ async function fetchOne(username: string, signal?: AbortSignal): Promise<SideRes
   try {
     const url = new URL("/api/reposts", window.location.origin);
     url.searchParams.set("username", username);
-    url.searchParams.set("refresh", "1");
     const res = await fetch(url.toString(), { cache: "no-store", signal });
     const json = await res.json();
     if (!res.ok) return { kind: "error", message: json?.error ?? "Request failed" };
