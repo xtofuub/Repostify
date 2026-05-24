@@ -72,6 +72,7 @@ export function RepostSearch({
       const url = new URL("/api/reposts", window.location.origin);
       url.searchParams.set("username", username);
       if (limit > 0) url.searchParams.set("limit", String(limit));
+      url.searchParams.set("refresh", "1");
       const res = await fetch(url.toString(), { cache: "no-store" });
       const json = await res.json();
       if (!res.ok) {

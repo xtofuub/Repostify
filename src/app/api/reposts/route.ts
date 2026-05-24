@@ -13,10 +13,12 @@ export async function GET(req: NextRequest) {
   const limitRaw = req.nextUrl.searchParams.get("limit");
   const parsed = limitRaw ? parseInt(limitRaw, 10) : NaN;
   const limit = Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, 2000) : undefined;
+  const refresh = req.nextUrl.searchParams.get("refresh") === "1";
   try {
     const result = await scrapeReposts(username, {
       maxScrolls: 60,
       maxItems: limit,
+      bypassCache: refresh,
     });
     return Response.json(result);
   } catch (err) {

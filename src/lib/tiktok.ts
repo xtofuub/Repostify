@@ -605,7 +605,12 @@ export async function scrapeReposts(
     await context.close().catch(() => {});
   }
 
-  reposts.sort((a, b) => b.createTime - a.createTime);
+  // Preserve TikTok's native order — the repost feed returns newest-reposted
+  // first. Sorting by createTime would bury fresh reposts of older videos.
+  // Only re-sort when TikTok exposed an explicit repostedAt on every item.
+  if (reposts.length > 0 && reposts.every((r) => r.repostedAt > 0)) {
+    reposts.sort((a, b) => b.repostedAt - a.repostedAt);
+  }
   if (reposts.length > maxItems) reposts.length = maxItems;
 
   const result: ScrapeResult = {
