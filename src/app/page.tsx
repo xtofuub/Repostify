@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, Users } from "lucide-react";
 import {
   BackgroundVideo,
   GuideLines,
@@ -105,11 +105,12 @@ function Navbar() {
               Repostify
           </span>
         </a>
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-4 sm:gap-6">
           <Link
             href="/compare"
-            className="hidden sm:inline text-[12px] uppercase tracking-[0.22em] text-white/45 hover:text-white transition-colors"
+            className="inline-flex items-center gap-1.5 text-[12px] uppercase tracking-[0.22em] text-white hover:text-[#25f4ee] transition-colors"
           >
+            <Users className="h-3.5 w-3.5" />
             Compare
           </Link>
           <a
@@ -155,10 +156,20 @@ function Hero() {
         <div className="mt-9">
           <RepostSearch />
         </div>
-        <p className="mt-6 max-w-[44rem] mx-auto text-center text-[12px] leading-[1.6] text-white/45">
-          Public profiles only. No login. An empty result means the
-          profile&apos;s reposts tab is set to private.
-        </p>
+        <div className="mt-6 flex flex-col items-center gap-3">
+          <Link
+            href="/compare"
+            className="group inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.04] px-5 py-2.5 text-[13px] text-white/85 hover:text-white hover:border-white/30 hover:bg-white/[0.08] transition-colors"
+          >
+            <Users className="h-4 w-4 text-[#25f4ee]" />
+            Or compare two accounts
+            <ArrowUpRight className="h-3.5 w-3.5 opacity-60 group-hover:opacity-100 transition-opacity" />
+          </Link>
+          <p className="max-w-[44rem] mx-auto text-center text-[12px] leading-[1.6] text-white/45">
+            Public profiles only. No login. An empty result means the
+            profile&apos;s reposts tab is set to private.
+          </p>
+        </div>
       </div>
     </header>
   );
