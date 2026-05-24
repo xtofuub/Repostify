@@ -47,6 +47,11 @@ export type ScrapeResult = {
   // Means the profile is restricted to logged-in viewers (often
   // followers-only). Anonymous scrape cannot bypass it.
   audienceRestricted: boolean;
+  // True when profile loaded fine AND a repost XHR fired AND zero items came
+  // back. Signals TikTok soft-blocked the scrape (IP / fingerprint rate limit)
+  // rather than the profile genuinely having no reposts. Distinguishes the
+  // "private tab" UX from the "we got throttled, retry later" UX.
+  rateLimited: boolean;
   // True when the scraper used a saved TikTok session (storageState from
   // .tiktok-session.json). False = anonymous scrape.
   loggedIn: boolean;
@@ -687,6 +692,16 @@ export async function scrapeReposts(
   }
   if (reposts.length > maxItems) reposts.length = maxItems;
 
+  // Rate-limit signature: profile loaded, an XHR did fire, but zero items
+  // came back AND nothing claimed the tab was private or captcha-locked.
+  // TikTok's quiet way of soft-blocking the request.
+  const rateLimited =
+    !captchaSuspected &&
+    !audienceRestricted &&
+    profile !== null &&
+    repostXhrSeen > 0 &&
+    reposts.length === 0;
+
   const result: ScrapeResult = {
     username,
     profile,
@@ -694,6 +709,7 @@ export async function scrapeReposts(
     hasMore,
     captchaSuspected,
     audienceRestricted,
+    rateLimited,
     loggedIn,
     fetchedAt: Date.now(),
   };

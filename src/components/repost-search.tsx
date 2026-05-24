@@ -417,6 +417,23 @@ function Results({
         </div>
       );
     }
+    if (data.rateLimited) {
+      return (
+        <div className="rounded-3xl border border-amber-400/25 bg-amber-400/[0.05] p-10 max-w-2xl mx-auto text-center">
+          <TriangleAlert className="mx-auto h-8 w-8 text-amber-300/80" />
+          <h2 className="mt-4 font-display text-3xl tracking-tight">
+            TikTok soft-blocked this scrape
+          </h2>
+          <p className="mt-3 text-[14px] text-white/70 leading-[1.65] max-w-md mx-auto">
+            @{username}&apos;s profile loaded, but TikTok returned an empty
+            repost list — a quiet rate-limit signal. Wait a few minutes and
+            retry, or try a different handle in the meantime. This is
+            <span className="text-white"> not </span>
+            the same as a private reposts tab.
+          </p>
+        </div>
+      );
+    }
     return (
       <div className="rounded-3xl border border-white/10 bg-white/[0.02] p-10 max-w-2xl mx-auto text-center">
         <AlertCircle className="mx-auto h-8 w-8 text-white/45" />
