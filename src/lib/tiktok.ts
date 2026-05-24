@@ -2,6 +2,7 @@ import { launch } from "cloakbrowser";
 import type { Browser } from "playwright";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { randomInt } from "node:crypto";
 
 export type Repost = {
   id: string;
@@ -41,6 +42,10 @@ export type ScrapeResult = {
   reposts: Repost[];
   hasMore: boolean;
   captchaSuspected: boolean;
+  // Set when TikTok shows the "creator turned on audience controls" panel.
+  // Means the profile is restricted to logged-in viewers (often
+  // followers-only). Anonymous scrape cannot bypass it.
+  audienceRestricted: boolean;
   fetchedAt: number;
   debug?: {
     finalUrl: string;
@@ -166,11 +171,15 @@ async function getBrowser(): Promise<Browser> {
     // canvas/WebGL/audio/fonts/GPU/screen/WebRTC/CDP fingerprints — undetectable
     // because it's a real browser, not a JS-injected wrapper. humanize=false:
     // wrapping page.mouse.wheel inflates per-scroll latency to ~1s.
+    // Random fingerprint per process boot — defeats fingerprint-based
+    // identification by sites that have flagged a prior session.
+    const fpSeed = randomInt(1, 2_147_483_647);
     const b = (await launch({
       headless: true,
       humanize: false,
       timezone: "America/Los_Angeles",
       locale: "en-US",
+      args: [`--fingerprint=${fpSeed}`],
       launchOptions: { args: ["--no-sandbox"] },
     })) as unknown as Browser;
     cachedBrowser = b;
@@ -296,6 +305,7 @@ export async function scrapeReposts(
   let finalUrl = "";
   let title = "";
   let captchaSuspected = false;
+  let audienceRestricted = false;
   let repostTabFound = false;
   let rehydratedItems = 0;
 
@@ -310,6 +320,12 @@ export async function scrapeReposts(
     captchaSuspected =
       /captcha|verify|security/i.test(title) ||
       /captcha|tiktok-verify/i.test(finalUrl);
+
+    // Early check: TikTok sometimes renders the audience-controls panel on
+    // initial profile load, hiding the reposts tab entirely.
+    audienceRestricted = await page
+      .evaluate(() => /audience controls/i.test(document.body?.innerText ?? ""))
+      .catch(() => false);
 
     await page
       .waitForSelector(
@@ -503,15 +519,20 @@ export async function scrapeReposts(
 
       // Detect tab-level "Something went wrong" panel that TikTok renders
       // when reposts are private or restricted. Skip the scroll loop entirely.
-      const tabError = await page
+      const tabState = await page
         .evaluate(() => {
+          const body = document.body?.innerText ?? "";
+          // "Audience controls" = creator restricted profile to logged-in
+          // (often followers-only) viewers. Anonymous scrape cannot see it.
+          const audience = /audience controls/i.test(body);
           const el = document.querySelector('[data-e2e="user-post-empty-state"], [class*="DivErrorContainer"]');
-          if (el && /something went wrong/i.test(el.textContent ?? "")) return true;
-          return false;
+          const error = !!(el && /something went wrong/i.test(el.textContent ?? ""));
+          return { audience, error };
         })
-        .catch(() => false);
-      if (tabError && repostXhrSeen === 0) {
-        // No XHR + error UI = private/blocked tab. No point scrolling.
+        .catch(() => ({ audience: false, error: false }));
+      if (tabState.audience) audienceRestricted = true;
+      if ((tabState.error || tabState.audience) && repostXhrSeen === 0) {
+        // No XHR + restriction UI = private/blocked tab. No point scrolling.
         clickedTab = false;
       }
 
@@ -619,6 +640,7 @@ export async function scrapeReposts(
     reposts,
     hasMore,
     captchaSuspected,
+    audienceRestricted,
     fetchedAt: Date.now(),
   };
 

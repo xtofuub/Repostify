@@ -402,6 +402,21 @@ function Results({
   }, [reposts, keywords, draft, exact]);
 
   if (reposts.length === 0) {
+    if (data.audienceRestricted) {
+      return (
+        <div className="rounded-3xl border border-white/10 bg-white/[0.02] p-10 max-w-2xl mx-auto text-center">
+          <AlertCircle className="mx-auto h-8 w-8 text-white/45" />
+          <h2 className="mt-4 font-display text-3xl tracking-tight">
+            @{username} restricted their audience
+          </h2>
+          <p className="mt-3 text-[14px] text-white/65 leading-[1.65] max-w-md mx-auto">
+            This creator turned on TikTok audience controls — their profile is
+            only visible to logged-in viewers they allow (often followers
+            only). Anonymous scraping cannot bypass this.
+          </p>
+        </div>
+      );
+    }
     return (
       <div className="rounded-3xl border border-white/10 bg-white/[0.02] p-10 max-w-2xl mx-auto text-center">
         <AlertCircle className="mx-auto h-8 w-8 text-white/45" />
