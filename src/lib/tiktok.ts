@@ -4,6 +4,13 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { randomInt } from "node:crypto";
+import {
+  getCachedIdSet,
+  getCachedProfile,
+  getCachedReposts,
+  putProfile,
+  upsertReposts,
+} from "@/lib/cache";
 
 export type Repost = {
   id: string;
@@ -52,6 +59,11 @@ export type ScrapeResult = {
   // rather than the profile genuinely having no reposts. Distinguishes the
   // "private tab" UX from the "we got throttled, retry later" UX.
   rateLimited: boolean;
+  // True when TikTok rendered its "Something went wrong" panel inside the
+  // Reposts tab and our retry-click on the Refresh button didn't recover.
+  // Different from rateLimited: this is a TikTok-side render error, often
+  // transient per profile. Tell the user to retry rather than wait it out.
+  tabError: boolean;
   // True when the scraper used a saved TikTok session (storageState from
   // .tiktok-session.json). False = anonymous scrape.
   loggedIn: boolean;
@@ -307,10 +319,19 @@ export async function scrapeReposts(
   });
   const page = await context.newPage();
 
+  // Load persisted cache up-front. Incremental scrape stops walking pages
+  // once we've seen N consecutive items already in the cache — TikTok orders
+  // newest-reposted first, so consecutive cache-hits means we've caught up.
+  const cachedIds = getCachedIdSet(username);
+  const hasCache = cachedIds.size > 0;
+  const INCREMENTAL_STOP_THRESHOLD = 12;
+
   const reposts: Repost[] = [];
   const seen = new Set<string>();
   let hasMore = false;
   let repostXhrSeen = 0;
+  let consecutiveKnown = 0;
+  let incrementalDone = false;
 
   let serverBlocked = false;
   // Capture first XHR URL — we use it as a template for direct cursor-based
@@ -332,7 +353,15 @@ export async function scrapeReposts(
     if (Array.isArray(json.itemList)) {
       for (const raw of json.itemList) {
         const norm = normalizeItem(raw);
-        if (norm && !seen.has(norm.id)) {
+        if (!norm) continue;
+        if (hasCache) {
+          if (cachedIds.has(norm.id)) {
+            consecutiveKnown++;
+          } else {
+            consecutiveKnown = 0;
+          }
+        }
+        if (!seen.has(norm.id)) {
           seen.add(norm.id);
           reposts.push(norm);
           added++;
@@ -342,6 +371,9 @@ export async function scrapeReposts(
     if (typeof json.hasMore === "boolean") hasMore = json.hasMore;
     const c = json.maxCursor ?? json.cursor;
     if (c !== undefined && c !== null) nextCursor = c;
+    if (hasCache && consecutiveKnown >= INCREMENTAL_STOP_THRESHOLD) {
+      incrementalDone = true;
+    }
     return { newCount: added };
   }
 
@@ -356,8 +388,6 @@ export async function scrapeReposts(
     }
     try {
       const json = await res.json();
-      // Dump first XHR response when DEBUG is on so we can inspect what
-      // timestamp fields TikTok actually exposes per item.
       if (DEBUG && repostXhrSeen === 1) {
         const dir = join(process.cwd(), ".debug");
         await mkdir(dir, { recursive: true }).catch(() => {});
@@ -375,6 +405,7 @@ export async function scrapeReposts(
   let title = "";
   let captchaSuspected = false;
   let audienceRestricted = false;
+  let tabError = false;
   let repostTabFound = false;
   let rehydratedItems = 0;
 
@@ -402,6 +433,32 @@ export async function scrapeReposts(
         { timeout: 8_000 },
       )
       .catch(() => {});
+
+    // Profile-level "Something went wrong" render — TikTok shows this when
+    // soft-blocking us (after rapid repeated requests, often with a session
+    // it's flagged). No tabs render in this state. Try the in-page Refresh
+    // button once to recover before later detection logic gives up.
+    {
+      const errorSeen = await page
+        .evaluate(() =>
+          /something went wrong/i.test(document.body?.innerText ?? ""),
+        )
+        .catch(() => false);
+      if (errorSeen) {
+        await page
+          .evaluate(() => {
+            const btn = Array.from(
+              document.querySelectorAll<HTMLButtonElement>("button"),
+            ).find(
+              (b) =>
+                /refresh/i.test(b.textContent ?? "") && b.offsetParent !== null,
+            );
+            btn?.click();
+          })
+          .catch(() => {});
+        await page.waitForTimeout(2_500);
+      }
+    }
 
     // Dismiss cookie banner if present — it blocks pointer events on the
     // viewport which prevents TikTok's lazy-loader from observing scroll.
@@ -586,13 +643,13 @@ export async function scrapeReposts(
         captchaSuspected = true;
       }
 
-      // Detect tab-level "Something went wrong" panel that TikTok renders
-      // when reposts are private or restricted. Skip the scroll loop entirely.
+      // Detect tab-level "Something went wrong" panel + audience-controls
+      // restriction. Audience controls = creator hid profile from logged-out
+      // viewers. The error panel is often transient: TikTok renders it on
+      // first tab click but the in-tab "Refresh" button usually succeeds.
       const tabState = await page
         .evaluate(() => {
           const body = document.body?.innerText ?? "";
-          // "Audience controls" = creator restricted profile to logged-in
-          // (often followers-only) viewers. Anonymous scrape cannot see it.
           const audience = /audience controls/i.test(body);
           const el = document.querySelector('[data-e2e="user-post-empty-state"], [class*="DivErrorContainer"]');
           const error = !!(el && /something went wrong/i.test(el.textContent ?? ""));
@@ -600,8 +657,40 @@ export async function scrapeReposts(
         })
         .catch(() => ({ audience: false, error: false }));
       if (tabState.audience) audienceRestricted = true;
+
+      // Retry path: if the tab rendered TikTok's generic "Something went
+      // wrong" panel AND no XHR has fired yet, look for the in-panel
+      // "Refresh" button and click it. Usually clears on the second attempt.
+      if (tabState.error && repostXhrSeen === 0 && !tabState.audience) {
+        const refreshed = await page
+          .evaluate(() => {
+            const buttons = Array.from(
+              document.querySelectorAll<HTMLButtonElement>("button"),
+            );
+            const btn = buttons.find(
+              (b) => /refresh/i.test(b.textContent ?? "") && b.offsetParent !== null,
+            );
+            if (btn) {
+              btn.click();
+              return true;
+            }
+            return false;
+          })
+          .catch(() => false);
+        if (refreshed) {
+          await page
+            .waitForResponse(
+              (r) => /\/api\/repost\/item_list/i.test(r.url()),
+              { timeout: 8_000 },
+            )
+            .catch(() => {});
+        }
+      }
+
+      // Re-check tab state after the retry attempt — only bail if the panel
+      // is still rendered AND no XHR ever fired.
       if ((tabState.error || tabState.audience) && repostXhrSeen === 0) {
-        // No XHR + restriction UI = private/blocked tab. No point scrolling.
+        if (tabState.error && !tabState.audience) tabError = true;
         clickedTab = false;
       }
 
@@ -627,6 +716,7 @@ export async function scrapeReposts(
           captchaSuspected = true;
           break;
         }
+        if (incrementalDone) break;
         if (reposts.length >= maxItems) break;
         if (!hasMore) break;
         if (!firstXhrUrl) break;
@@ -686,6 +776,20 @@ export async function scrapeReposts(
       }
     }
 
+    // Late check: if we never captured a repost XHR AND no items came back,
+    // poll once more for the "Something went wrong" text. It often renders
+    // after the page has settled, missing the early detector. We can't rely
+    // on the DivErrorContainer class alone — TikTok uses the same class for
+    // unrelated panels (notifications, etc.) — so test body text directly.
+    if (!tabError && !audienceRestricted && repostXhrSeen === 0 && reposts.length === 0) {
+      const lateError = await page
+        .evaluate(() =>
+          /something went wrong/i.test(document.body?.innerText ?? ""),
+        )
+        .catch(() => false);
+      if (lateError) tabError = true;
+    }
+
     if (DEBUG) {
       const html = await page.content().catch(() => "");
       const png = await page.screenshot({ fullPage: false }).catch(() => Buffer.alloc(0));
@@ -695,13 +799,50 @@ export async function scrapeReposts(
     await context.close().catch(() => {});
   }
 
+  // Persist fresh items to the durable cache. Cover/playUrl are stripped
+  // inside upsertReposts since they expire. Only writes when the scrape
+  // wasn't blocked, otherwise we'd flush good cache with empty results.
+  if (!captchaSuspected && reposts.length > 0) {
+    try {
+      upsertReposts(username, reposts);
+    } catch {
+      // Cache write failure shouldn't break the response
+    }
+  }
+  if (!captchaSuspected && profile) {
+    try {
+      putProfile(username, profile);
+    } catch {}
+  }
+
+  // Merge fresh scrape with everything previously cached. Fresh items keep
+  // their live cover/playUrl; older cached items render with empty URLs
+  // (RepostCard shows a Play-icon placeholder; player iframe doesn't need it).
+  let merged: Repost[] = reposts;
+  if (hasCache) {
+    const cachedAll = getCachedReposts(username);
+    const ids = new Set(reposts.map((r) => r.id));
+    merged = [...reposts];
+    for (const c of cachedAll) {
+      if (!ids.has(c.id)) merged.push(c);
+    }
+  }
+
   // Preserve TikTok's native order — the repost feed returns newest-reposted
   // first. Sorting by createTime would bury fresh reposts of older videos.
   // Only re-sort when TikTok exposed an explicit repostedAt on every item.
-  if (reposts.length > 0 && reposts.every((r) => r.repostedAt > 0)) {
-    reposts.sort((a, b) => b.repostedAt - a.repostedAt);
+  if (merged.length > 0 && merged.every((r) => r.repostedAt > 0)) {
+    merged.sort((a, b) => b.repostedAt - a.repostedAt);
   }
-  if (reposts.length > maxItems) reposts.length = maxItems;
+  if (merged.length > maxItems) merged.length = maxItems;
+
+  // Fall back to cached profile if this scrape didn't get one (e.g. early
+  // captcha) but cache holds a known-good copy.
+  let outProfile = profile;
+  if (!outProfile) {
+    const cp = getCachedProfile(username);
+    if (cp) outProfile = cp.profile;
+  }
 
   // Rate-limit signature: profile loaded, an XHR did fire, but zero items
   // came back AND nothing claimed the tab was private or captcha-locked.
@@ -715,12 +856,13 @@ export async function scrapeReposts(
 
   const result: ScrapeResult = {
     username,
-    profile,
-    reposts,
+    profile: outProfile,
+    reposts: merged,
     hasMore,
     captchaSuspected,
     audienceRestricted,
     rateLimited,
+    tabError,
     loggedIn,
     fetchedAt: Date.now(),
   };
@@ -735,8 +877,9 @@ export async function scrapeReposts(
     };
   }
 
-  // Cache only non-blocked results to avoid sticky failure state.
-  if (!captchaSuspected && reposts.length > 0) {
+  // In-memory hot cache stays as a request-coalescing layer; SQLite is the
+  // durable backing store.
+  if (!captchaSuspected && merged.length > 0) {
     cache.set(cacheKey, { at: Date.now(), result });
   }
 

@@ -48,6 +48,9 @@ dev.err.log
 # TikTok session cookies — sensitive, never commit
 .tiktok-session.json
 
+# Persistent scrape cache (SQLite)
+.cache/
+
 # claude-code per-user local settings
 .claude/settings.local.json
 
