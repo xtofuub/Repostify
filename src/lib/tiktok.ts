@@ -202,11 +202,22 @@ async function getBrowser(): Promise<Browser> {
     // Random fingerprint per process boot — defeats fingerprint-based
     // identification by sites that have flagged a prior session.
     const fpSeed = randomInt(1, 2_147_483_647);
+
+    // Optional proxy. Set TIKTOK_PROXY to a full URL (http/https/socks5,
+    // with creds if needed) when the local IP gets rate-limited by TikTok.
+    // Examples: TIKTOK_PROXY=http://user:pass@proxy.example.com:8080
+    //           TIKTOK_PROXY=socks5://user:pass@proxy.example.com:1080
+    // `geoip: true` makes cloakbrowser auto-derive timezone/locale from the
+    // proxy IP — keeps fingerprint coherent. Requires mmdb-lib (already a
+    // transitive dep of cloakbrowser when geoip is used).
+    const proxy = process.env.TIKTOK_PROXY?.trim() || undefined;
+
     const b = (await launch({
       headless: true,
       humanize: false,
-      timezone: "America/Los_Angeles",
-      locale: "en-US",
+      timezone: proxy ? undefined : "America/Los_Angeles",
+      locale: proxy ? undefined : "en-US",
+      ...(proxy ? { proxy, geoip: true } : {}),
       args: [`--fingerprint=${fpSeed}`],
       launchOptions: { args: ["--no-sandbox"] },
     })) as unknown as Browser;
