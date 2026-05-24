@@ -106,6 +106,12 @@ function Navbar() {
           </span>
         </a>
         <div className="flex items-center gap-6">
+          <Link
+            href="/compare"
+            className="hidden sm:inline text-[12px] uppercase tracking-[0.22em] text-white/45 hover:text-white transition-colors"
+          >
+            Compare
+          </Link>
           <a
             href="#faq"
             className="hidden sm:inline text-[12px] uppercase tracking-[0.22em] text-white/45 hover:text-white transition-colors"
@@ -241,6 +247,11 @@ function Footer() {
             <li>
               <Link href="/" className="hover:text-white transition-colors">
                 Home
+              </Link>
+            </li>
+            <li>
+              <Link href="/compare" className="hover:text-white transition-colors">
+                Compare
               </Link>
             </li>
             <li>
