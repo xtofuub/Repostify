@@ -19,13 +19,11 @@ export async function GET(req: NextRequest) {
   if (!username) {
     return Response.json({ error: "username query param required" }, { status: 400 });
   }
-  const mobile = req.nextUrl.searchParams.get("mobile") === "1";
   try {
     const result = await scrapeReposts(username, {
       maxScrolls: 1,
       maxItems: 1,
       bypassCache: true,
-      mobile,
     });
     const first = result.reposts[0] ?? null;
     return Response.json({

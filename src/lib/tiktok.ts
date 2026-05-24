@@ -255,28 +255,9 @@ function loadStorageState(): StorageState | undefined {
   }
 }
 
-// iPhone Safari UA + viewport.
-//
-// NOTE 2026-05-24: mobile-web does NOT expose a Reposts tab at all — TikTok
-// strips that feature server-side for mobile UAs. The mobile *app* shows
-// repost timestamps but uses signed API hosts (api16-normal-c-useast1a)
-// that require X-Argus/X-Khronos/X-Gorgon — out of scope here. Mobile mode
-// is kept as a knob for future experiments (different captcha behavior,
-// alternate item shapes) but does not unlock repost timestamps.
-const MOBILE_UA =
-  "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 " +
-  "(KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
-const MOBILE_VIEWPORT = { width: 390, height: 844 };
-
 export async function scrapeReposts(
   rawUsername: string,
-  opts: {
-    maxScrolls?: number;
-    timeoutMs?: number;
-    maxItems?: number;
-    bypassCache?: boolean;
-    mobile?: boolean;
-  } = {},
+  opts: { maxScrolls?: number; timeoutMs?: number; maxItems?: number; bypassCache?: boolean } = {},
 ): Promise<ScrapeResult> {
   const username = rawUsername.replace(/^@/, "").trim();
   if (!username) throw new Error("Username required");
@@ -302,13 +283,9 @@ export async function scrapeReposts(
   }
 
   const browser = await getBrowser();
-  const useMobile = opts.mobile === true;
   const context = await browser.newContext({
-    viewport: useMobile ? MOBILE_VIEWPORT : { width: 1366, height: 900 },
-    deviceScaleFactor: useMobile ? 3 : 1,
-    ...(useMobile
-      ? { userAgent: MOBILE_UA, isMobile: true, hasTouch: true }
-      : {}),
+    viewport: { width: 1366, height: 900 },
+    deviceScaleFactor: 1,
     extraHTTPHeaders: { "Accept-Language": "en-US,en;q=0.9" },
     ...(storageState ? { storageState } : {}),
   });
