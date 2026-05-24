@@ -117,18 +117,35 @@ function normalizeItem(item: TikTokItem): Repost | null {
   const statsV2 = item.statsV2 ?? {};
 
   // Try to find a repost timestamp on the raw item. Accept only values that
-  // look like a plausible unix-seconds timestamp (> 2010-01-01 epoch).
-  const candidates: Array<number | undefined> = [
+  // look like a plausible unix-seconds timestamp (> 2010-01-01 epoch and not
+  // in the far future). Fixed candidates first, then a heuristic scan for any
+  // unknown key whose name suggests a repost/save/share timestamp.
+  const MIN_TS = 1_262_300_400; // 2010-01-01
+  const MAX_TS = Math.floor(Date.now() / 1000) + 86_400; // tomorrow
+  const isTs = (v: unknown): v is number =>
+    typeof v === "number" && v > MIN_TS && v < MAX_TS;
+
+  let repostedAt = 0;
+  const fixed: Array<number | undefined> = [
     item.repost_time,
     item.reposted_at,
     item.addedAt,
     item.repostTime,
   ];
-  let repostedAt = 0;
-  for (const c of candidates) {
-    if (typeof c === "number" && c > 1_262_300_400) {
+  for (const c of fixed) {
+    if (isTs(c)) {
       repostedAt = c;
       break;
+    }
+  }
+  if (!repostedAt) {
+    for (const [k, v] of Object.entries(item as Record<string, unknown>)) {
+      if (k === "createTime") continue;
+      if (!/repost|added|saved|share_time|recommend_time|bookmark/i.test(k)) continue;
+      if (isTs(v)) {
+        repostedAt = v;
+        break;
+      }
     }
   }
 
