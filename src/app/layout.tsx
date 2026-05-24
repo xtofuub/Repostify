@@ -76,6 +76,17 @@ export default function RootLayout({
       lang="en"
       className={`${inter.variable} ${instrument.variable} h-full antialiased`}
     >
+      <head>
+        {/*
+          DarkReader rewrites inline `style` and adds `data-darkreader-*`
+          attributes on every SVG/input after SSR, which produces hydration
+          mismatches in dev. The site already ships its own dark theme, so we
+          opt out of DarkReader entirely. Respected by DarkReader extensions
+          across Chrome/Firefox/Safari.
+        */}
+        <meta name="darkreader-lock" />
+        <meta name="color-scheme" content="dark" />
+      </head>
       <body
         className="min-h-full bg-[#0a0a0b] text-white font-sans"
         suppressHydrationWarning
