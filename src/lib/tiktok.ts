@@ -1,6 +1,7 @@
 import { launch } from "cloakbrowser";
-import type { Browser } from "playwright";
+import type { Browser, BrowserContextOptions } from "playwright";
 import { mkdir, writeFile } from "node:fs/promises";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { randomInt } from "node:crypto";
 
@@ -46,6 +47,9 @@ export type ScrapeResult = {
   // Means the profile is restricted to logged-in viewers (often
   // followers-only). Anonymous scrape cannot bypass it.
   audienceRestricted: boolean;
+  // True when the scraper used a saved TikTok session (storageState from
+  // .tiktok-session.json). False = anonymous scrape.
+  loggedIn: boolean;
   fetchedAt: number;
   debug?: {
     finalUrl: string;
@@ -208,6 +212,30 @@ type CacheEntry = { at: number; result: ScrapeResult };
 const cache = new Map<string, CacheEntry>();
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 min
 
+const SESSION_PATH = join(process.cwd(), ".tiktok-session.json");
+type StorageState = NonNullable<BrowserContextOptions["storageState"]>;
+
+// Re-read session file when its mtime changes so re-login via
+// `npm run tiktok:login` takes effect without a server restart.
+let cachedStorage: { state: StorageState; mtimeMs: number } | null = null;
+function loadStorageState(): StorageState | undefined {
+  if (!existsSync(SESSION_PATH)) {
+    cachedStorage = null;
+    return undefined;
+  }
+  try {
+    const { mtimeMs } = statSync(SESSION_PATH);
+    if (cachedStorage && cachedStorage.mtimeMs === mtimeMs) {
+      return cachedStorage.state;
+    }
+    const state = JSON.parse(readFileSync(SESSION_PATH, "utf8")) as StorageState;
+    cachedStorage = { state, mtimeMs };
+    return state;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function scrapeReposts(
   rawUsername: string,
   opts: { maxScrolls?: number; timeoutMs?: number; maxItems?: number; bypassCache?: boolean } = {},
@@ -222,7 +250,12 @@ export async function scrapeReposts(
   const timeoutMs = opts.timeoutMs ?? 30_000;
   const maxItems = opts.maxItems ?? Infinity;
 
-  const cacheKey = `${username.toLowerCase()}:${Number.isFinite(maxItems) ? maxItems : "all"}`;
+  // Probe storageState first — cache must partition on auth state, otherwise
+  // an anonymous result poisons the cache for a later logged-in request.
+  const storageState = loadStorageState();
+  const loggedIn = storageState !== undefined;
+
+  const cacheKey = `${loggedIn ? "auth" : "anon"}:${username.toLowerCase()}:${Number.isFinite(maxItems) ? maxItems : "all"}`;
   if (!opts.bypassCache) {
     const hit = cache.get(cacheKey);
     if (hit && Date.now() - hit.at < CACHE_TTL_MS) {
@@ -235,6 +268,7 @@ export async function scrapeReposts(
     viewport: { width: 1366, height: 900 },
     deviceScaleFactor: 1,
     extraHTTPHeaders: { "Accept-Language": "en-US,en;q=0.9" },
+    ...(storageState ? { storageState } : {}),
   });
   const page = await context.newPage();
 
@@ -641,6 +675,7 @@ export async function scrapeReposts(
     hasMore,
     captchaSuspected,
     audienceRestricted,
+    loggedIn,
     fetchedAt: Date.now(),
   };
 

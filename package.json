@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "tiktok:login": "node scripts/tiktok-login.mjs"
   },
   "dependencies": {
     "@base-ui/react": "1.4.1",

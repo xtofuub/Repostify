@@ -45,6 +45,9 @@ dev.err.log
 # cloakbrowser persistent profile
 .cloak-profile/
 
+# TikTok session cookies — sensitive, never commit
+.tiktok-session.json
+
 # claude-code per-user local settings
 .claude/settings.local.json
 
