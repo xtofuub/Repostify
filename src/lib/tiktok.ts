@@ -116,10 +116,12 @@ function normalizeItem(item: TikTokItem): Repost | null {
   const stats = item.stats ?? {};
   const statsV2 = item.statsV2 ?? {};
 
-  // Try to find a repost timestamp on the raw item. Accept only values that
-  // look like a plausible unix-seconds timestamp (> 2010-01-01 epoch and not
-  // in the far future). Fixed candidates first, then a heuristic scan for any
-  // unknown key whose name suggests a repost/save/share timestamp.
+  // Verified 2026-05-24 against logged-in /api/repost/item_list: the endpoint
+  // does NOT expose a per-item repost timestamp. Only `createTime` (video
+  // upload time) is present. Order comes from the server (newest-reposted
+  // first) and `cursor` is a sequential index, not a timestamp. We keep the
+  // candidate scan in case TikTok adds the field later or another endpoint
+  // surfaces it.
   const MIN_TS = 1_262_300_400; // 2010-01-01
   const MAX_TS = Math.floor(Date.now() / 1000) + 86_400; // tomorrow
   const isTs = (v: unknown): v is number =>

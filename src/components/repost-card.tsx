@@ -85,7 +85,11 @@ export function RepostCard({
                 )}
               </p>
               <p className="truncate text-[10px] uppercase tracking-wider text-white/55">
-                {formatRelativeTime(repost.createTime)}
+                {repost.repostedAt > 0
+                  ? `Reposted ${formatRelativeTime(repost.repostedAt)}`
+                  : repost.createTime > 0
+                    ? `Posted ${formatRelativeTime(repost.createTime)}`
+                    : ""}
               </p>
             </div>
           </div>
