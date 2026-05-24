@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
+  turbopack: {
+    root: __dirname,
+  },
   // Allow any LAN host on the 192.168.* range during dev — useful when
   // testing on phones/tablets via the network address Next prints at boot.
   allowedDevOrigins: [
