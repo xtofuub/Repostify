@@ -5,9 +5,11 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { randomInt } from "node:crypto";
 import {
+  getCachedAllScrapeRun,
   getCachedIdSet,
   getCachedProfile,
   getCachedReposts,
+  putCachedAllScrapeRun,
   putProfile,
   upsertReposts,
 } from "@/lib/cache";
@@ -284,18 +286,25 @@ const inFlightRefresh = new Map<string, Promise<void>>();
 function refreshKey(username: string, loggedIn: boolean): string {
   return `${loggedIn ? "auth" : "anon"}:${username.toLowerCase()}`;
 }
-function scheduleBackgroundRefresh(username: string, loggedIn: boolean): void {
-  const key = refreshKey(username, loggedIn);
+function scheduleBackgroundRefresh(
+  username: string,
+  loggedIn: boolean,
+  opts: { deep?: boolean } = {},
+): void {
+  const key = `${refreshKey(username, loggedIn)}:${opts.deep ? "deep" : "top"}`;
   if (inFlightRefresh.has(key)) return;
   const p = (async () => {
     try {
-      // bypassCache=true forces real scrape. maxScrolls capped low so a
-      // background refresh only walks ~3 pages — just enough to catch new
-      // reposts at the top. Full backfill happens on the cold first scrape.
+      // bypassCache=true forces real scrape. Top-only refresh walks ~3 pages
+      // to catch new reposts at the head of the feed; deep refresh re-walks
+      // the whole feed so an "all" view stays complete + URLs stay live.
       await scrapeReposts(username, {
         bypassCache: true,
-        maxScrolls: 3,
-        maxItems: 90,
+        maxScrolls: opts.deep ? 400 : 3,
+        maxItems: opts.deep ? undefined : 90,
+        // Deep refresh runs off the request path, so give it a much larger
+        // time budget to keep extending the cache toward completeness.
+        walkBudgetMs: opts.deep ? 240_000 : 30_000,
       });
     } catch {
       // Background failure stays silent; next user request retries.
@@ -311,13 +320,14 @@ function buildResultFromCache(
   reposts: Repost[],
   loggedIn: boolean,
   fetchedAt: number,
+  hasMore = false,
 ): ScrapeResult {
   const profile = getCachedProfile(username)?.profile ?? null;
   return {
     username,
     profile,
     reposts,
-    hasMore: false,
+    hasMore,
     captchaSuspected: false,
     audienceRestricted: false,
     rateLimited: false,
@@ -329,7 +339,13 @@ function buildResultFromCache(
 
 export async function scrapeReposts(
   rawUsername: string,
-  opts: { maxScrolls?: number; timeoutMs?: number; maxItems?: number; bypassCache?: boolean } = {},
+  opts: {
+    maxScrolls?: number;
+    timeoutMs?: number;
+    maxItems?: number;
+    bypassCache?: boolean;
+    walkBudgetMs?: number;
+  } = {},
 ): Promise<ScrapeResult> {
   const username = rawUsername.replace(/^@/, "").trim();
   if (!username) throw new Error("Username required");
@@ -340,27 +356,51 @@ export async function scrapeReposts(
   const maxScrolls = opts.maxScrolls ?? 25;
   const timeoutMs = opts.timeoutMs ?? 30_000;
   const maxItems = opts.maxItems ?? Infinity;
+  const finiteMaxItems = Number.isFinite(maxItems) ? maxItems : null;
+  // Wall-clock cap on the pagination walk. A page budget alone can't bound
+  // latency (TikTok pages run ~2s each), so a deep "all" walk could exceed
+  // the request timeout. When the budget is hit we stop with hasMore=true so
+  // a later deep background refresh extends the cache further.
+  const walkBudgetMs = opts.walkBudgetMs ?? 90_000;
 
   const storageState = loadStorageState();
   const loggedIn = storageState !== undefined;
 
-  // Stale-while-revalidate: when the DB already has reposts for this user,
-  // return them instantly and fire a background refresh so the next request
-  // sees fresher data + URLs. Skip when bypassCache is set (background
-  // refresh path, the compare page's force-refresh path, etc.).
-  if (!opts.bypassCache) {
-    const cached = getCachedReposts(username);
-    if (cached.length > 0) {
+  // Stale-while-revalidate (finite request): when the DB already holds enough
+  // reposts to satisfy the limit, return instantly + refresh the head in the
+  // background.
+  if (!opts.bypassCache && finiteMaxItems !== null) {
+    const cached = getCachedReposts(username, finiteMaxItems);
+    if (cached.length >= finiteMaxItems) {
       const cachedProfileRow = getCachedProfile(username);
       scheduleBackgroundRefresh(username, loggedIn);
-      const trimmed =
-        cached.length > maxItems ? cached.slice(0, maxItems) : cached;
       return buildResultFromCache(
         username,
-        trimmed,
+        cached,
         loggedIn,
         cachedProfileRow?.fetchedAt ?? Date.now(),
       );
+    }
+  }
+
+  // SWR for "all": only safe to serve from cache once a full "all" walk has
+  // been recorded (scrape_runs). Without that marker the cache may be a
+  // partial head from finite requests, so we must walk TikTok. When a run
+  // exists, serve everything instantly and deep-refresh in the background.
+  if (!opts.bypassCache && finiteMaxItems === null) {
+    const run = getCachedAllScrapeRun(username);
+    if (run) {
+      const cached = getCachedReposts(username);
+      if (cached.length > 0) {
+        scheduleBackgroundRefresh(username, loggedIn, { deep: true });
+        return buildResultFromCache(
+          username,
+          cached,
+          loggedIn,
+          run.fetchedAt,
+          run.hasMore,
+        );
+      }
     }
   }
 
@@ -374,10 +414,12 @@ export async function scrapeReposts(
   const page = await context.newPage();
 
   // Load persisted cache up-front. Incremental scrape stops walking pages
-  // once we've seen N consecutive items already in the cache — TikTok orders
-  // newest-reposted first, so consecutive cache-hits means we've caught up.
+  // once we've seen N consecutive items already in a cache large enough for
+  // the finite request. For "All" or backfills larger than cache, keep going.
   const cachedIds = getCachedIdSet(username);
   const hasCache = cachedIds.size > 0;
+  const canStopAtKnownCache =
+    finiteMaxItems !== null && cachedIds.size >= finiteMaxItems;
   const INCREMENTAL_STOP_THRESHOLD = 12;
 
   const reposts: Repost[] = [];
@@ -408,7 +450,7 @@ export async function scrapeReposts(
       for (const raw of json.itemList) {
         const norm = normalizeItem(raw);
         if (!norm) continue;
-        if (hasCache) {
+        if (canStopAtKnownCache) {
           if (cachedIds.has(norm.id)) {
             consecutiveKnown++;
           } else {
@@ -425,7 +467,7 @@ export async function scrapeReposts(
     if (typeof json.hasMore === "boolean") hasMore = json.hasMore;
     const c = json.maxCursor ?? json.cursor;
     if (c !== undefined && c !== null) nextCursor = c;
-    if (hasCache && consecutiveKnown >= INCREMENTAL_STOP_THRESHOLD) {
+    if (canStopAtKnownCache && consecutiveKnown >= INCREMENTAL_STOP_THRESHOLD) {
       incrementalDone = true;
     }
     return { newCount: added };
@@ -765,6 +807,7 @@ export async function scrapeReposts(
       // computed by TikTok's webmssdk; we just swap the cursor param. The
       // page's fetch interceptor refreshes signatures naturally.
       let stagnant = 0;
+      const walkDeadline = Date.now() + walkBudgetMs;
       for (let i = 0; i < maxScrolls; i++) {
         if (serverBlocked) {
           captchaSuspected = true;
@@ -775,6 +818,9 @@ export async function scrapeReposts(
         if (!hasMore) break;
         if (!firstXhrUrl) break;
         if (nextCursor === null || nextCursor === undefined) break;
+        // Time budget hit: stop but leave hasMore as-is so a later deep
+        // background refresh continues paginating from where we left off.
+        if (Date.now() > walkDeadline) break;
 
         // Build next URL with updated cursor. Keep msToken stale-but-valid
         // (TikTok generally accepts within session lifetime).
@@ -889,6 +935,16 @@ export async function scrapeReposts(
     merged.sort((a, b) => b.repostedAt - a.repostedAt);
   }
   if (merged.length > maxItems) merged.length = maxItems;
+
+  // Record completeness of an "all" walk so later "all" requests can serve
+  // from cache. finiteMaxItems === null means this was an unbounded request.
+  // We store hasMore too: if TikTok still had more pages when we hit the
+  // page budget, a later deep refresh keeps extending the cache.
+  if (!captchaSuspected && finiteMaxItems === null && merged.length > 0) {
+    try {
+      putCachedAllScrapeRun(username, merged.length, hasMore);
+    } catch {}
+  }
 
   // Fall back to cached profile if this scrape didn't get one (e.g. early
   // captcha) but cache holds a known-good copy.

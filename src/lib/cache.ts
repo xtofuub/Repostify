@@ -11,6 +11,11 @@ import type { Repost, ScrapeResult } from "@/lib/tiktok";
 type StoredRepost = Repost;
 
 type ProfileRow = NonNullable<ScrapeResult["profile"]>;
+type AllScrapeRun = {
+  itemCount: number;
+  hasMore: boolean;
+  fetchedAt: number;
+};
 
 const CACHE_DIR = join(process.cwd(), ".cache");
 const DB_PATH = join(CACHE_DIR, "repostify.db");
@@ -40,6 +45,14 @@ function open(): Database.Database {
     );
     CREATE INDEX IF NOT EXISTS idx_reposts_owner_pos
       ON reposts(owner, position);
+    CREATE TABLE IF NOT EXISTS scrape_runs (
+      owner       TEXT NOT NULL,
+      mode        TEXT NOT NULL,
+      item_count  INTEGER NOT NULL,
+      has_more    INTEGER NOT NULL,
+      fetched_at  INTEGER NOT NULL,
+      PRIMARY KEY (owner, mode)
+    );
   `);
   return db;
 }
@@ -107,6 +120,43 @@ export function getCachedIdSet(username: string): Set<string> {
   return new Set(rows.map((r) => r.repost_id));
 }
 
+// Records that a full "all" walk completed for this user, so later "all"
+// requests can serve the cache instead of re-walking every TikTok page.
+export function getCachedAllScrapeRun(username: string): AllScrapeRun | null {
+  const row = open()
+    .prepare<
+      [string],
+      { item_count: number; has_more: number; fetched_at: number }
+    >(
+      `SELECT item_count, has_more, fetched_at
+       FROM scrape_runs WHERE owner = ? AND mode = 'all'`,
+    )
+    .get(username.toLowerCase());
+  if (!row) return null;
+  return {
+    itemCount: row.item_count,
+    hasMore: row.has_more === 1,
+    fetchedAt: row.fetched_at,
+  };
+}
+
+export function putCachedAllScrapeRun(
+  username: string,
+  itemCount: number,
+  hasMore: boolean,
+): void {
+  open()
+    .prepare(
+      `INSERT INTO scrape_runs(owner, mode, item_count, has_more, fetched_at)
+       VALUES (?, 'all', ?, ?, ?)
+       ON CONFLICT(owner, mode) DO UPDATE SET
+         item_count = excluded.item_count,
+         has_more = excluded.has_more,
+         fetched_at = excluded.fetched_at`,
+    )
+    .run(username.toLowerCase(), itemCount, hasMore ? 1 : 0, Date.now());
+}
+
 // Merge fresh items into cache. New items get prepended (negative positions
 // preserve insertion order without renumbering existing rows). Existing items
 // have last_seen_at bumped + stats refreshed.
@@ -162,8 +212,9 @@ export function clearCache(username?: string): void {
   if (username) {
     dbi.prepare("DELETE FROM reposts WHERE owner = ?").run(username.toLowerCase());
     dbi.prepare("DELETE FROM profiles WHERE username = ?").run(username.toLowerCase());
+    dbi.prepare("DELETE FROM scrape_runs WHERE owner = ?").run(username.toLowerCase());
   } else {
-    dbi.exec("DELETE FROM reposts; DELETE FROM profiles;");
+    dbi.exec("DELETE FROM reposts; DELETE FROM profiles; DELETE FROM scrape_runs;");
   }
 }
 
