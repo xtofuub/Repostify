@@ -8,6 +8,7 @@ import {
   SectionLabel,
 } from "@/components/brand";
 import { RepostSearch } from "@/components/repost-search";
+import { TikTokConnect } from "@/components/tiktok-connect";
 import { SITE_NAME, SITE_URL } from "@/lib/seo";
 
 const FAQ_ITEMS = [
@@ -119,6 +120,9 @@ function Navbar() {
           >
             FAQ
           </a>
+          <span className="hidden md:inline">
+            <TikTokConnect />
+          </span>
           <a
             href="https://www.tiktok.com/"
             target="_blank"
