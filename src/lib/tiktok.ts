@@ -11,7 +11,7 @@ import {
   getCachedReposts,
   putCachedAllScrapeRun,
   putProfile,
-  upsertReposts,
+  saveRepostsOrdered,
 } from "@/lib/cache";
 
 export type Repost = {
@@ -899,25 +899,10 @@ export async function scrapeReposts(
     await context.close().catch(() => {});
   }
 
-  // Persist fresh items to the durable cache. Cover/playUrl are stripped
-  // inside upsertReposts since they expire. Only writes when the scrape
-  // wasn't blocked, otherwise we'd flush good cache with empty results.
-  if (!captchaSuspected && reposts.length > 0) {
-    try {
-      upsertReposts(username, reposts);
-    } catch {
-      // Cache write failure shouldn't break the response
-    }
-  }
-  if (!captchaSuspected && profile) {
-    try {
-      putProfile(username, profile);
-    } catch {}
-  }
-
-  // Merge fresh scrape with everything previously cached. Fresh items keep
-  // their live cover/playUrl; older cached items render with empty URLs
-  // (RepostCard shows a Play-icon placeholder; player iframe doesn't need it).
+  // Merge fresh scrape with everything previously cached, fresh first. This
+  // walk started at the top of TikTok's feed, so `reposts` is newest-first;
+  // leftover cached items (older, or below this walk's window) follow in their
+  // existing order. The merged list IS the authoritative display order.
   let merged: Repost[] = reposts;
   if (hasCache) {
     const cachedAll = getCachedReposts(username);
@@ -926,6 +911,22 @@ export async function scrapeReposts(
     for (const c of cachedAll) {
       if (!ids.has(c.id)) merged.push(c);
     }
+  }
+
+  // Persist the merged order so the DB's position column matches the feed.
+  // Only write when the scrape wasn't blocked, else we'd flush good cache
+  // with an empty/garbage result.
+  if (!captchaSuspected && merged.length > 0) {
+    try {
+      saveRepostsOrdered(username, merged);
+    } catch {
+      // Cache write failure shouldn't break the response
+    }
+  }
+  if (!captchaSuspected && profile) {
+    try {
+      putProfile(username, profile);
+    } catch {}
   }
 
   // Preserve TikTok's native order — the repost feed returns newest-reposted

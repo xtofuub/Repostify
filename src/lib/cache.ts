@@ -157,54 +157,74 @@ export function putCachedAllScrapeRun(
     .run(username.toLowerCase(), itemCount, hasMore ? 1 : 0, Date.now());
 }
 
-// Merge fresh items into cache. New items get prepended (negative positions
-// preserve insertion order without renumbering existing rows). Existing items
-// have last_seen_at bumped + stats refreshed.
-export function upsertReposts(
+// Persist the authoritative newest-first ordering from a scrape. `ordered`
+// must already be in TikTok feed order (index 0 = newest repost). Position is
+// set to the array index so getCachedReposts returns the exact same order.
+//
+// This replaces the older "prepend new items with negative positions" scheme,
+// which assigned position by *discovery* order — a deep backfill that reached
+// older reposts on later pages would prepend them as if they were new, pushing
+// genuinely-old reposts to the top. Ordering by the caller's merged list (the
+// real feed order) fixes that.
+//
+// first_seen_at is preserved for existing rows; rows absent from `ordered`
+// (e.g. un-reposted, or below an incremental refresh's window) are left in
+// place but pushed below the ordered block so they never outrank fresh data.
+export function saveRepostsOrdered(
   username: string,
-  freshOrdered: Repost[],
-): { added: number; updated: number } {
-  if (freshOrdered.length === 0) return { added: 0, updated: 0 };
+  ordered: Repost[],
+): { written: number } {
+  if (ordered.length === 0) return { written: 0 };
   const owner = username.toLowerCase();
   const dbi = open();
-
-  const existing = getCachedIdSet(owner);
-  // Min position currently in DB — new items go below that.
-  const minRow = dbi
-    .prepare<[string], { m: number | null }>(
-      "SELECT MIN(position) AS m FROM reposts WHERE owner = ?",
-    )
-    .get(owner);
-  let nextPos = (minRow?.m ?? 0) - 1;
-
   const now = Date.now();
-  const insert = dbi.prepare(
-    `INSERT INTO reposts(owner, repost_id, position, json, first_seen_at, last_seen_at)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+
+  const seenFirst = dbi.prepare<[string, string], { first_seen_at: number }>(
+    "SELECT first_seen_at FROM reposts WHERE owner = ? AND repost_id = ?",
   );
-  const update = dbi.prepare(
-    `UPDATE reposts SET json = ?, last_seen_at = ? WHERE owner = ? AND repost_id = ?`,
+  const upsert = dbi.prepare(
+    `INSERT INTO reposts(owner, repost_id, position, json, first_seen_at, last_seen_at)
+     VALUES (@owner, @id, @pos, @json, @first, @now)
+     ON CONFLICT(owner, repost_id) DO UPDATE SET
+       position = excluded.position,
+       json = excluded.json,
+       last_seen_at = excluded.last_seen_at`,
+  );
+  // Any cached rows not in `ordered` get shoved below the ordered block,
+  // keeping their relative order, so a partial refresh never reorders them
+  // above fresh items.
+  const pushBelow = dbi.prepare(
+    `UPDATE reposts SET position = position + @offset
+     WHERE owner = @owner AND position >= 0 AND repost_id NOT IN (${ordered
+       .map(() => "?")
+       .join(",")})`,
   );
 
-  let added = 0;
-  let updated = 0;
-  const tx = dbi.transaction((items: Repost[]) => {
-    // Walk in reverse so newest fresh item ends up at lowest position number
-    // (= top of result when ORDER BY position ASC).
-    for (let i = items.length - 1; i >= 0; i--) {
-      const item = items[i];
-      const stored = JSON.stringify(item satisfies StoredRepost);
-      if (existing.has(item.id)) {
-        update.run(stored, now, owner, item.id);
-        updated++;
-      } else {
-        insert.run(owner, item.id, nextPos--, stored, now, now);
-        added++;
-      }
+  const ids = new Set(ordered.map((r) => r.id));
+
+  const tx = dbi.transaction(() => {
+    // First, lift any pre-existing non-negative positions out of the way.
+    if (ids.size > 0) {
+      pushBelow.run(
+        { owner, offset: ordered.length },
+        ...ordered.map((r) => r.id),
+      );
+    }
+    for (let i = 0; i < ordered.length; i++) {
+      const item = ordered[i];
+      const prior = seenFirst.get(owner, item.id);
+      upsert.run({
+        owner,
+        id: item.id,
+        pos: i,
+        json: JSON.stringify(item satisfies StoredRepost),
+        first: prior?.first_seen_at ?? now,
+        now,
+      });
     }
   });
-  tx(freshOrdered);
-  return { added, updated };
+  tx();
+  return { written: ordered.length };
 }
 
 export function clearCache(username?: string): void {
