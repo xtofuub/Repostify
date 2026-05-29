@@ -10,6 +10,7 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import {
   AlertCircle,
+  ArrowDownWideNarrow,
   ArrowUpRight,
   BadgeCheck,
   Check,
@@ -51,6 +52,61 @@ type Aggregates = {
 };
 
 const LIMIT_OPTIONS = [30, 60, 120, 250, 0] as const;
+
+type SortKey =
+  | "feed"
+  | "views"
+  | "likes"
+  | "comments"
+  | "shares"
+  | "duration"
+  | "newest"
+  | "oldest";
+
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: "feed", label: "Feed order" },
+  { key: "views", label: "Most viewed" },
+  { key: "likes", label: "Most liked" },
+  { key: "comments", label: "Most discussed" },
+  { key: "shares", label: "Most shared" },
+  { key: "duration", label: "Longest" },
+  { key: "newest", label: "Newest upload" },
+  { key: "oldest", label: "Oldest upload" },
+];
+
+const SORT_LABEL: Record<SortKey, string> = Object.fromEntries(
+  SORT_OPTIONS.map((o) => [o.key, o.label]),
+) as Record<SortKey, string>;
+
+// Sort a copy of the canonical feed list. "feed" returns the input untouched
+// (newest-reposted-first, TikTok's native order). All others are stable, so
+// ties fall back to feed order. We deliberately omit a "recently reposted"
+// sort: firstSeenAt is only a trustworthy repost-time signal at the head of
+// the feed (deep items get a late first-seen from backfill discovery), so a
+// global sort by it would surface old reposts as if they were new.
+function sortReposts(list: Repost[], key: SortKey): Repost[] {
+  if (key === "feed") return list;
+  const arr = [...list];
+  const desc = (f: (r: Repost) => number) => arr.sort((a, b) => f(b) - f(a));
+  switch (key) {
+    case "views":
+      return desc((r) => r.stats.plays);
+    case "likes":
+      return desc((r) => r.stats.likes);
+    case "comments":
+      return desc((r) => r.stats.comments);
+    case "shares":
+      return desc((r) => r.stats.shares);
+    case "duration":
+      return desc((r) => r.duration);
+    case "newest":
+      return desc((r) => r.createTime);
+    case "oldest":
+      return arr.sort((a, b) => a.createTime - b.createTime);
+    default:
+      return arr;
+  }
+}
 
 export function RepostSearch({
   initialUsername,
@@ -357,6 +413,93 @@ function LimitMenu({
   );
 }
 
+function SortMenu({
+  value,
+  onChange,
+}: {
+  value: SortKey;
+  onChange: (k: SortKey) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (!wrapperRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("click", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("click", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={wrapperRef} className="relative flex-none z-20">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((o) => !o);
+        }}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Sort: ${SORT_LABEL[value]}`}
+        className="h-9 inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] hover:border-white/20 px-2.5 text-white/75 hover:text-white transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#25f4ee]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b] cursor-pointer"
+      >
+        <ArrowDownWideNarrow className="h-3.5 w-3.5 text-white/60" />
+        <span className="text-[12.5px] font-medium tracking-tight">
+          {SORT_LABEL[value]}
+        </span>
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          aria-label="Sort reposts"
+          onClick={(e) => e.stopPropagation()}
+          className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[12rem] rounded-xl border border-white/10 bg-[#101012] shadow-[0_24px_60px_rgba(0,0,0,0.6)] overflow-hidden py-1"
+        >
+          <p className="px-3 pt-2.5 pb-2 text-[11px] font-medium uppercase tracking-[0.18em] text-white/55 whitespace-nowrap">
+            Sort by
+          </p>
+          {SORT_OPTIONS.map((o) => {
+            const active = o.key === value;
+            return (
+              <button
+                key={o.key}
+                type="button"
+                role="menuitemradio"
+                aria-checked={active}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onChange(o.key);
+                  setOpen(false);
+                }}
+                className={`w-full px-3 h-9 flex items-center justify-between gap-4 text-left transition-colors outline-none focus-visible:bg-white/[0.05] cursor-pointer ${
+                  active
+                    ? "bg-white/[0.04] text-white"
+                    : "text-white/70 hover:bg-white/[0.03] hover:text-white"
+                }`}
+              >
+                <span className="text-[13.5px] font-medium">{o.label}</span>
+                {active && (
+                  <Check className="h-3.5 w-3.5 text-[#25f4ee] flex-none" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Results({
   data,
   aggregates,
@@ -390,6 +533,12 @@ function Results({
     [reposts, data.trackingSince],
   );
 
+  // Client-side sort. The mask + grid + player all run over this sorted view,
+  // so their index mapping stays consistent. feedPosition rides along on each
+  // item, so observed-timing labels stay correct in any order.
+  const [sort, setSort] = useState<SortKey>("feed");
+  const sorted = useMemo(() => sortReposts(reposts, sort), [reposts, sort]);
+
   // Visibility mask: which reposts pass the filter. We render ALL cards
   // always and toggle visibility via CSS, so changing the filter doesn't
   // unmount cards (preserves image cache + animation state).
@@ -398,7 +547,7 @@ function Results({
     const lc = keywords.map((k) => k.toLowerCase());
     const all = liveDraft ? [...lc, liveDraft] : lc;
     if (all.length === 0) {
-      return { mask: reposts.map(() => true), matchedCount: reposts.length };
+      return { mask: sorted.map(() => true), matchedCount: sorted.length };
     }
     // Pre-build regex when exact mode is on; word boundary on either side.
     const matchers = exact
@@ -411,7 +560,7 @@ function Results({
         )
       : null;
     let count = 0;
-    const m = reposts.map((r) => {
+    const m = sorted.map((r) => {
       const desc = (r.desc ?? "").toLowerCase();
       const hit = exact
         ? matchers!.some((rx) => rx.test(desc))
@@ -420,7 +569,7 @@ function Results({
       return hit;
     });
     return { mask: m, matchedCount: count };
-  }, [reposts, keywords, draft, exact]);
+  }, [sorted, keywords, draft, exact]);
 
   if (reposts.length === 0) {
     if (data.audienceRestricted) {
@@ -520,10 +669,12 @@ function Results({
       />
 
       <RepostGrid
-        reposts={reposts}
+        reposts={sorted}
         visibilityMask={mask}
         matchedCount={matchedCount}
         trackingSince={data.trackingSince}
+        sort={sort}
+        onSortChange={setSort}
       />
     </div>
   );
@@ -920,11 +1071,15 @@ function RepostGrid({
   visibilityMask,
   matchedCount,
   trackingSince,
+  sort,
+  onSortChange,
 }: {
   reposts: Repost[];
   visibilityMask?: boolean[];
   matchedCount?: number;
   trackingSince?: number;
+  sort: SortKey;
+  onSortChange: (k: SortKey) => void;
 }) {
   const [playingIndex, setPlayingIndex] = useState<number | null>(null);
   const total = reposts.length;
@@ -953,16 +1108,19 @@ function RepostGrid({
 
   return (
     <div>
-      <div className="flex items-baseline justify-between mb-4">
+      <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
         <p className="text-[11px] uppercase tracking-[0.22em] text-white/55">
           Reel ·{" "}
           {filtered
             ? `${showing} of ${total} items`
             : `${showing} item${showing === 1 ? "" : "s"}`}
         </p>
-        <p className="text-[11px] uppercase tracking-[0.18em] text-white/40">
-          By recency · click to play · scroll / arrows to navigate
-        </p>
+        <div className="flex items-center gap-3">
+          <p className="hidden md:block text-[11px] uppercase tracking-[0.18em] text-white/40">
+            click to play · arrows to navigate
+          </p>
+          <SortMenu value={sort} onChange={onSortChange} />
+        </div>
       </div>
 
       {showing === 0 && (
