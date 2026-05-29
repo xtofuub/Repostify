@@ -56,6 +56,7 @@ const LIMIT_OPTIONS = [30, 60, 120, 250, 0] as const;
 
 type SortKey =
   | "feed"
+  | "oldest_repost"
   | "views"
   | "likes"
   | "comments"
@@ -65,7 +66,8 @@ type SortKey =
   | "oldest";
 
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
-  { key: "feed", label: "Feed order" },
+  { key: "feed", label: "Newest reposted" },
+  { key: "oldest_repost", label: "Oldest reposted" },
   { key: "views", label: "Most viewed" },
   { key: "likes", label: "Most liked" },
   { key: "comments", label: "Most discussed" },
@@ -80,16 +82,21 @@ const SORT_LABEL: Record<SortKey, string> = Object.fromEntries(
 ) as Record<SortKey, string>;
 
 // Sort a copy of the canonical feed list. "feed" returns the input untouched
-// (newest-reposted-first, TikTok's native order). All others are stable, so
-// ties fall back to feed order. We deliberately omit a "recently reposted"
-// sort: firstSeenAt is only a trustworthy repost-time signal at the head of
-// the feed (deep items get a late first-seen from backfill discovery), so a
-// global sort by it would surface old reposts as if they were new.
+// (newest-reposted-first, TikTok's native order). "oldest_repost" reverses it
+// — feed position is the exact repost order, so this is the user's oldest
+// repost first (within the loaded set; load "All" for their true first ever).
+// This is distinct from "oldest/newest upload" (createTime, the video's post
+// date). All sorts are stable, so ties fall back to feed order. We omit a
+// firstSeenAt-based "recently spotted" sort: it's only trustworthy at the head
+// of the feed (deep items get a late first-seen from backfill discovery).
 function sortReposts(list: Repost[], key: SortKey): Repost[] {
   if (key === "feed") return list;
   const arr = [...list];
   const desc = (f: (r: Repost) => number) => arr.sort((a, b) => f(b) - f(a));
   switch (key) {
+    case "oldest_repost":
+      // Highest feed position = reposted longest ago.
+      return desc((r) => r.feedPosition ?? 0);
     case "views":
       return desc((r) => r.stats.plays);
     case "likes":
