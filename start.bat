@@ -24,7 +24,8 @@ echo Leave this window open while you use it. Close it to stop the server.
 echo.
 
 rem Open the browser once the server actually answers (side window polls it).
-start "" powershell -NoProfile -Command ^
-  "for($i=0;$i -lt 90;$i++){try{ if((Invoke-WebRequest -UseBasicParsing http://localhost:3000 -TimeoutSec 2).StatusCode -eq 200){ Start-Process 'http://localhost:3000'; break } }catch{}; Start-Sleep -Milliseconds 800 }"
+rem Single line — no caret continuation (a trailing space after ^ would break it).
+start "" powershell -NoProfile -Command "for($i=0;$i -lt 90;$i++){try{ if((Invoke-WebRequest -UseBasicParsing http://localhost:3000 -TimeoutSec 2).StatusCode -eq 200){ Start-Process 'http://localhost:3000'; break } }catch{}; Start-Sleep -Milliseconds 800 }"
 
-call %PM% run dev
+rem Pin to port 3000 so the URL above always matches the running server.
+call %PM% run dev -- -p 3000
