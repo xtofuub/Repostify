@@ -1131,59 +1131,102 @@ function UploadTimeline({ reposts }: { reposts: Repost[] }) {
     return { buckets, granularity, peak };
   }, [reposts]);
 
+  const [hover, setHover] = useState<number | null>(null);
+
   // Not worth a chart for a single period or no dated videos.
   if (buckets.length < 2) return null;
-  const max = Math.max(...buckets.map((b) => b.count));
+  const max = Math.max(...buckets.map((b) => b.count), 1);
+  const granLabel =
+    granularity === "year"
+      ? "by year"
+      : granularity === "quarter"
+        ? "by quarter"
+        : "by month";
+  const active = hover != null ? buckets[hover] : peak;
+  // Few enough bars to print the count atop each without clutter.
+  const showLabels = buckets.length <= 14;
+  // Leave headroom for the count label so the tallest bar doesn't clip.
+  const heightScale = showLabels ? 0.82 : 1;
+  // With few buckets, cap + center the plot so bars sit together instead of
+  // floating across the full width. Many buckets fill the container.
+  const plotMaxWidth =
+    buckets.length < 12 ? `${buckets.length * 88}px` : undefined;
 
   return (
     <div>
       <div className="flex items-baseline justify-between mb-4 gap-4 flex-wrap">
         <p className="text-[11px] uppercase tracking-[0.22em] text-white/55 inline-flex items-center gap-2">
           <CalendarRange className="h-3.5 w-3.5" />
-          Upload timeline · when the reposted videos were made
+          Upload timeline
+          <span className="hidden sm:inline text-white/35">
+            · when the reposted videos were made
+          </span>
         </p>
-        {peak && peak.count > 0 && (
-          <p className="text-[11px] uppercase tracking-[0.18em] text-white/40">
-            peak{" "}
-            <span className="text-white/70">{peak.label}</span> ·{" "}
-            <span className="tnum text-white/70">{peak.count}</span>
+        {active && active.count > 0 && (
+          <p className="text-[11px] uppercase tracking-[0.18em] text-white/40 tnum">
+            {hover == null && <span className="text-white/35">peak </span>}
+            <span className="text-white">{active.label}</span>
+            <span className="text-white/35"> · </span>
+            <span className="text-white">{active.count}</span>
+            <span className="text-white/35">
+              {" "}
+              {active.count === 1 ? "repost" : "reposts"}
+            </span>
           </p>
         )}
       </div>
-      <div className="rounded-3xl border border-white/10 bg-white/[0.015] px-5 sm:px-6 py-5">
-        <div className="flex items-end gap-px h-24">
-          {buckets.map((b) => (
-            <div
-              key={b.key}
-              title={`${b.label}: ${b.count} repost${b.count === 1 ? "" : "s"}`}
-              className="group relative flex-1 h-full flex items-end"
-            >
-              <div
-                className={`w-full rounded-sm transition-colors ${
-                  b.count > 0
-                    ? "bg-gradient-to-t from-[#ff2d8a] to-[#25f4ee] opacity-70 group-hover:opacity-100"
-                    : "bg-white/5"
-                }`}
-                style={{
-                  height:
-                    b.count > 0
-                      ? `${Math.max(6, (b.count / max) * 100)}%`
-                      : "2px",
-                }}
-              />
-            </div>
-          ))}
-        </div>
-        <div className="mt-3 flex items-center justify-between text-[10.5px] uppercase tracking-[0.18em] text-white/35">
-          <span>{buckets[0].label}</span>
-          <span className="text-white/25 normal-case tracking-normal">
-            {granularity === "year"
-              ? "by year"
-              : granularity === "quarter"
-                ? "by quarter"
-                : "by month"}
-          </span>
-          <span>{buckets[buckets.length - 1].label}</span>
+      <div className="rounded-3xl border border-white/10 bg-[#0b0b0d]/90 backdrop-blur-xl px-5 sm:px-6 pt-5 pb-4">
+        <div className="mx-auto" style={{ maxWidth: plotMaxWidth }}>
+          <div
+            className="flex items-end gap-2 sm:gap-3 h-36 border-b border-white/10"
+            onMouseLeave={() => setHover(null)}
+          >
+            {buckets.map((b, i) => {
+              const isActive = hover === i || (hover == null && b === peak);
+              const h =
+                b.count > 0
+                  ? Math.max(6, (b.count / max) * 100 * heightScale)
+                  : 0;
+              return (
+                <div
+                  key={b.key}
+                  title={`${b.label}: ${b.count} repost${b.count === 1 ? "" : "s"}`}
+                  onMouseEnter={() => setHover(i)}
+                  className="group relative flex-1 h-full flex flex-col items-center justify-end gap-1.5"
+                >
+                  {showLabels && b.count > 0 && (
+                    <span
+                      className={`text-[10px] tnum leading-none transition-colors ${
+                        isActive ? "text-white" : "text-white/40"
+                      }`}
+                    >
+                      {b.count}
+                    </span>
+                  )}
+                  {b.count > 0 ? (
+                    <div
+                      className={`w-full max-w-[72px] rounded-t-[4px] transition-[height,background-color] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                        isActive
+                          ? "bg-[#25f4ee] shadow-[0_0_20px_-4px_rgba(37,244,238,0.5)]"
+                          : "bg-[#25f4ee]/25 group-hover:bg-[#25f4ee]/55"
+                      }`}
+                      style={{ height: `${h}%` }}
+                    />
+                  ) : (
+                    // empty period — faint baseline tick so gaps read as gaps
+                    <div className="w-full max-w-[72px] h-[2px] rounded-full bg-white/10" />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-3 flex items-center justify-between text-[10.5px] uppercase tracking-[0.2em] text-white/35">
+            <span>{buckets[0].label}</span>
+            <span className="text-white/25 normal-case tracking-normal">
+              {granLabel}
+            </span>
+            <span>{buckets[buckets.length - 1].label}</span>
+          </div>
         </div>
       </div>
     </div>
