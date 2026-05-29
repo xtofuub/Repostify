@@ -246,10 +246,9 @@ export function RepostSearch({
             <Results
               data={state.data}
               aggregates={aggregates}
-              onLoadAll={() => {
-                setLimit(0);
-                run(state.data.username, 0);
-              }}
+              // One-off unbounded fetch. Don't mutate `limit` — that would make
+              // every subsequent search default to a full deep scrape.
+              onLoadAll={() => run(state.data.username, 0)}
             />
           </motion.div>
         )}
@@ -652,6 +651,11 @@ function Results({
     );
   }
 
+  // The account has a known All-total larger than what's loaded → the grid
+  // header shows a count-aware "Load all" button, so suppress the banner's.
+  const moreAvailable =
+    data.knownTotal != null && data.knownTotal > reposts.length;
+
   return (
     <div className="space-y-10">
       {profile && <ProfileCard profile={profile} username={username} />}
@@ -666,7 +670,7 @@ function Results({
         />
       )}
 
-      {data.hasMore && (
+      {data.hasMore && !moreAvailable && (
         <PartialBanner
           count={reposts.length}
           captcha={data.captchaSuspected}
@@ -1310,7 +1314,9 @@ function RepostGrid({
         <p className="text-[11px] uppercase tracking-[0.22em] text-white/55">
           Reel ·{" "}
           {moreAvailable
-            ? `${formatCount(total)} of ${formatCount(knownTotal!)} reposts`
+            ? filtered
+              ? `${showing} match · ${formatCount(total)} of ${formatCount(knownTotal!)} loaded`
+              : `${formatCount(total)} of ${formatCount(knownTotal!)} reposts`
             : filtered
               ? `${showing} of ${total} items`
               : `${showing} item${showing === 1 ? "" : "s"}`}
