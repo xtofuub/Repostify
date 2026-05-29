@@ -13,6 +13,7 @@ import {
   ArrowDownWideNarrow,
   ArrowUpRight,
   BadgeCheck,
+  CalendarRange,
   Check,
   Clock,
   Eye,
@@ -657,6 +658,8 @@ function Results({
         />
       )}
 
+      <UploadTimeline reposts={reposts} />
+
       <FilterBar
         reposts={reposts}
         keywords={keywords}
@@ -1061,6 +1064,127 @@ function TopCreators({
             </a>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// Distribution of the *upload* dates (createTime) of the reposted videos.
+// This is real, always-present data — unlike repost time, which TikTok hides.
+// It answers "what era of content does this account amplify?". Granularity
+// adapts to the span so the strip never becomes hundreds of hairline bars.
+function UploadTimeline({ reposts }: { reposts: Repost[] }) {
+  const { buckets, granularity, peak } = useMemo(() => {
+    const times = reposts.map((r) => r.createTime).filter((t) => t > 0);
+    if (times.length === 0) {
+      return { buckets: [], granularity: "month" as const, peak: null };
+    }
+    const min = Math.min(...times);
+    const max = Math.max(...times);
+    const monthIndex = (d: Date) => d.getFullYear() * 12 + d.getMonth();
+    const span = monthIndex(new Date(max * 1000)) - monthIndex(new Date(min * 1000));
+    const granularity: "month" | "quarter" | "year" =
+      span <= 23 ? "month" : span <= 95 ? "quarter" : "year";
+
+    const keyOf = (d: Date) => {
+      const y = d.getFullYear();
+      if (granularity === "year") return `${y}`;
+      if (granularity === "quarter") return `${y}-Q${Math.floor(d.getMonth() / 3) + 1}`;
+      return `${y}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    };
+    const labelOf = (d: Date) => {
+      const y = `${d.getFullYear()}`.slice(2);
+      if (granularity === "year") return `${d.getFullYear()}`;
+      if (granularity === "quarter") return `Q${Math.floor(d.getMonth() / 3) + 1} '${y}`;
+      return `${d.toLocaleString(undefined, { month: "short" })} '${y}`;
+    };
+
+    // Walk continuous periods from first to last so empty gaps render as gaps.
+    const cur = new Date(min * 1000);
+    cur.setDate(1);
+    if (granularity === "quarter") cur.setMonth(Math.floor(cur.getMonth() / 3) * 3);
+    if (granularity === "year") cur.setMonth(0);
+    const end = new Date(max * 1000);
+    const step = granularity === "year" ? 12 : granularity === "quarter" ? 3 : 1;
+
+    const periods: { key: string; label: string }[] = [];
+    const seen = new Set<string>();
+    while (cur <= end) {
+      const k = keyOf(cur);
+      if (!seen.has(k)) {
+        seen.add(k);
+        periods.push({ key: k, label: labelOf(cur) });
+      }
+      cur.setMonth(cur.getMonth() + step);
+    }
+
+    const counts = new Map<string, number>();
+    for (const t of times) {
+      const k = keyOf(new Date(t * 1000));
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+    const buckets = periods.map((p) => ({ ...p, count: counts.get(p.key) ?? 0 }));
+    const peak = buckets.reduce(
+      (best, b) => (b.count > best.count ? b : best),
+      buckets[0] ?? { label: "", count: 0 },
+    );
+    return { buckets, granularity, peak };
+  }, [reposts]);
+
+  // Not worth a chart for a single period or no dated videos.
+  if (buckets.length < 2) return null;
+  const max = Math.max(...buckets.map((b) => b.count));
+
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-4 gap-4 flex-wrap">
+        <p className="text-[11px] uppercase tracking-[0.22em] text-white/55 inline-flex items-center gap-2">
+          <CalendarRange className="h-3.5 w-3.5" />
+          Upload timeline · when the reposted videos were made
+        </p>
+        {peak && peak.count > 0 && (
+          <p className="text-[11px] uppercase tracking-[0.18em] text-white/40">
+            peak{" "}
+            <span className="text-white/70">{peak.label}</span> ·{" "}
+            <span className="tnum text-white/70">{peak.count}</span>
+          </p>
+        )}
+      </div>
+      <div className="rounded-3xl border border-white/10 bg-white/[0.015] px-5 sm:px-6 py-5">
+        <div className="flex items-end gap-px h-24">
+          {buckets.map((b) => (
+            <div
+              key={b.key}
+              title={`${b.label}: ${b.count} repost${b.count === 1 ? "" : "s"}`}
+              className="group relative flex-1 h-full flex items-end"
+            >
+              <div
+                className={`w-full rounded-sm transition-colors ${
+                  b.count > 0
+                    ? "bg-gradient-to-t from-[#ff2d8a] to-[#25f4ee] opacity-70 group-hover:opacity-100"
+                    : "bg-white/5"
+                }`}
+                style={{
+                  height:
+                    b.count > 0
+                      ? `${Math.max(6, (b.count / max) * 100)}%`
+                      : "2px",
+                }}
+              />
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 flex items-center justify-between text-[10.5px] uppercase tracking-[0.18em] text-white/35">
+          <span>{buckets[0].label}</span>
+          <span className="text-white/25 normal-case tracking-normal">
+            {granularity === "year"
+              ? "by year"
+              : granularity === "quarter"
+                ? "by quarter"
+                : "by month"}
+          </span>
+          <span>{buckets[buckets.length - 1].label}</span>
+        </div>
       </div>
     </div>
   );
