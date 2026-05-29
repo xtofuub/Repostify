@@ -1024,11 +1024,12 @@ export async function scrapeReposts(
     loggedIn,
     fetchedAt: Date.now(),
     trackingSince,
-    // Prefer this walk's own total when it was an unbounded ("All") walk;
-    // otherwise fall back to the last recorded All run so a limited view still
-    // knows the real count.
+    // Prefer this walk's own total when it was a *complete* unbounded ("All")
+    // walk; otherwise fall back to the last recorded All run so a limited view
+    // still knows the real count. A captcha-truncated walk is partial, so don't
+    // pass its length off as the total.
     knownTotal:
-      finiteMaxItems === null && merged.length > 0
+      finiteMaxItems === null && merged.length > 0 && !captchaSuspected
         ? merged.length
         : getCachedAllScrapeRun(username)?.itemCount,
   };
