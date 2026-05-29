@@ -9,6 +9,8 @@ import {
   getCachedIdSet,
   getCachedProfile,
   getCachedReposts,
+  getSeenTimestamps,
+  getTrackingSince,
   putCachedAllScrapeRun,
   putProfile,
   saveRepostsOrdered,
@@ -20,6 +22,19 @@ export type Repost = {
   createTime: number;
   // When the account reposted this video. 0 if TikTok did not expose it.
   repostedAt: number;
+  // Observation timing, recorded by us — not reported by TikTok. firstSeenAt
+  // is the first time this repost appeared in the account's feed during one of
+  // our scrapes; lastSeenAt is the most recent. Epoch ms. Absent on a brand-new
+  // scrape that never touched the cache. For an account tracked across multiple
+  // scrapes, firstSeenAt on a *head-of-feed* item ≈ when it was reposted
+  // (bounded by scrape cadence); deep-feed items with a late firstSeenAt are
+  // backfill discovery, not new reposts — the UI gates on feed position.
+  firstSeenAt?: number;
+  lastSeenAt?: number;
+  // Transient render-time index = this repost's position in the canonical feed
+  // order (0 = newest reposted). Set client-side so it survives sorting and
+  // filtering; never persisted.
+  feedPosition?: number;
   cover: string;
   playUrl: string;
   duration: number;
@@ -70,6 +85,11 @@ export type ScrapeResult = {
   // .tiktok-session.json). False = anonymous scrape.
   loggedIn: boolean;
   fetchedAt: number;
+  // Epoch ms of the earliest repost observation for this account = when we
+  // started watching. Null/absent until at least one repost is cached. The UI
+  // uses it to label observed repost timing and to set expectations ("tracking
+  // since X — re-scan to sharpen timing").
+  trackingSince?: number;
   debug?: {
     finalUrl: string;
     title: string;
@@ -334,6 +354,7 @@ function buildResultFromCache(
     tabError: false,
     loggedIn,
     fetchedAt,
+    trackingSince: getTrackingSince(username) ?? undefined,
   };
 }
 
@@ -965,6 +986,27 @@ export async function scrapeReposts(
     repostXhrSeen > 0 &&
     reposts.length === 0;
 
+  // Overlay observation timing onto the items we're about to return. We just
+  // persisted `merged` via saveRepostsOrdered, so every id now has a row;
+  // reading the timestamps back keeps the live response consistent with the
+  // cache-served path (firstSeenAt preserved for known items, = now for new).
+  let trackingSince: number | undefined;
+  if (merged.length > 0) {
+    try {
+      const seenTs = getSeenTimestamps(username);
+      for (const r of merged) {
+        const ts = seenTs.get(r.id);
+        if (ts) {
+          r.firstSeenAt = ts.firstSeenAt;
+          r.lastSeenAt = ts.lastSeenAt;
+        }
+      }
+      trackingSince = getTrackingSince(username) ?? undefined;
+    } catch {
+      // Timing overlay is best-effort; never fail the scrape over it.
+    }
+  }
+
   const result: ScrapeResult = {
     username,
     profile: outProfile,
@@ -976,6 +1018,7 @@ export async function scrapeReposts(
     tabError,
     loggedIn,
     fetchedAt: Date.now(),
+    trackingSince,
   };
 
   if (DEBUG) {

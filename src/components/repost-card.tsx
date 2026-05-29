@@ -1,6 +1,12 @@
 import { ExternalLink, Heart, MessageCircle, Play, Share2 } from "lucide-react";
 import type { Repost } from "@/lib/tiktok";
-import { formatCount, formatDuration, formatRelativeTime } from "@/lib/format";
+import {
+  formatCount,
+  formatDuration,
+  formatRelativeTime,
+  isObservedRepost,
+  msToRelative,
+} from "@/lib/format";
 
 function proxied(url: string): string {
   if (!url) return "";
@@ -9,11 +15,18 @@ function proxied(url: string): string {
 
 export function RepostCard({
   repost,
+  trackingSince,
   onPlay,
 }: {
   repost: Repost;
+  trackingSince?: number;
   onPlay: (repost: Repost) => void;
 }) {
+  const observed = isObservedRepost({
+    firstSeenAt: repost.firstSeenAt,
+    trackingSince,
+    feedPosition: repost.feedPosition,
+  });
   return (
     <div className="group relative rounded-xl overflow-hidden border border-white/10 bg-white/[0.015] transition-[transform,border-color] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1 hover:border-white/25">
       <button
@@ -87,9 +100,11 @@ export function RepostCard({
               <p className="truncate text-[10px] uppercase tracking-wider text-white/55">
                 {repost.repostedAt > 0
                   ? `Reposted ${formatRelativeTime(repost.repostedAt)}`
-                  : repost.createTime > 0
-                    ? `Posted ${formatRelativeTime(repost.createTime)}`
-                    : ""}
+                  : observed
+                    ? `Reposted ~${msToRelative(repost.firstSeenAt!)}`
+                    : repost.createTime > 0
+                      ? `Posted ${formatRelativeTime(repost.createTime)}`
+                      : ""}
               </p>
             </div>
           </div>

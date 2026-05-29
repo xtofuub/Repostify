@@ -13,6 +13,7 @@ import {
   ArrowUpRight,
   BadgeCheck,
   Check,
+  Clock,
   Eye,
   Filter,
   Heart,
@@ -31,7 +32,7 @@ import { RepostCard } from "@/components/repost-card";
 import { RepostPlayer } from "@/components/repost-player";
 import { PrimaryButton } from "@/components/brand";
 import type { Repost, ScrapeResult } from "@/lib/tiktok";
-import { formatCount } from "@/lib/format";
+import { formatCount, isObservedRepost } from "@/lib/format";
 
 type State =
   | { kind: "idle" }
@@ -363,10 +364,31 @@ function Results({
   data: ScrapeResult;
   aggregates: Aggregates | null;
 }) {
-  const { profile, reposts, username } = data;
+  const { profile, username } = data;
   const [keywords, setKeywords] = useState<string[]>([]);
   const [draft, setDraft] = useState("");
   const [exact, setExact] = useState(false);
+
+  // Stamp each repost with its canonical feed index (0 = newest reposted) so
+  // observed-timing and position survive client-side sorting and filtering.
+  const reposts = useMemo(
+    () => data.reposts.map((r, i) => ({ ...r, feedPosition: i })),
+    [data.reposts],
+  );
+
+  // How many reposts we can date from observation (head-of-feed items first
+  // seen after we began watching). Drives the tracking note's copy.
+  const observedCount = useMemo(
+    () =>
+      reposts.filter((r) =>
+        isObservedRepost({
+          firstSeenAt: r.firstSeenAt,
+          trackingSince: data.trackingSince,
+          feedPosition: r.feedPosition,
+        }),
+      ).length,
+    [reposts, data.trackingSince],
+  );
 
   // Visibility mask: which reposts pass the filter. We render ALL cards
   // always and toggle visibility via CSS, so changing the filter doesn't
@@ -469,6 +491,14 @@ function Results({
 
       {aggregates && <StatRow agg={aggregates} />}
 
+      {data.trackingSince && (
+        <TrackingNote
+          since={data.trackingSince}
+          observed={observedCount}
+          username={username}
+        />
+      )}
+
       {data.hasMore && <PartialBanner count={reposts.length} />}
 
       {aggregates && aggregates.topCreators.length > 0 && (
@@ -493,7 +523,42 @@ function Results({
         reposts={reposts}
         visibilityMask={mask}
         matchedCount={matchedCount}
+        trackingSince={data.trackingSince}
       />
+    </div>
+  );
+}
+
+function TrackingNote({
+  since,
+  observed,
+  username,
+}: {
+  since: number;
+  observed: number;
+  username: string;
+}) {
+  const date = new Date(since).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  return (
+    <div className="flex items-start gap-3 rounded-2xl border border-white/8 bg-white/[0.015] px-5 py-3.5 text-[12.5px] text-white/55">
+      <Clock className="h-3.5 w-3.5 mt-0.5 flex-none text-white/40" />
+      <p className="leading-[1.6]">
+        TikTok doesn&apos;t report repost times. We log when each repost first
+        appears in <span className="text-white/80">@{username}</span>&apos;s
+        feed — tracking since <span className="text-white/80">{date}</span>.{" "}
+        {observed > 0 ? (
+          <>
+            <span className="text-[#25f4ee] tnum">{observed}</span> dated from
+            what we&apos;ve seen so far.
+          </>
+        ) : (
+          <>Re-scan over time to date new reposts as they surface.</>
+        )}
+      </p>
     </div>
   );
 }
@@ -854,10 +919,12 @@ function RepostGrid({
   reposts,
   visibilityMask,
   matchedCount,
+  trackingSince,
 }: {
   reposts: Repost[];
   visibilityMask?: boolean[];
   matchedCount?: number;
+  trackingSince?: number;
 }) {
   const [playingIndex, setPlayingIndex] = useState<number | null>(null);
   const total = reposts.length;
@@ -924,6 +991,7 @@ function RepostGrid({
             >
               <RepostCard
                 repost={r}
+                trackingSince={trackingSince}
                 onPlay={() => {
                   const v = visibleIndexFromOriginal
                     ? visibleIndexFromOriginal.get(i) ?? null
@@ -938,6 +1006,7 @@ function RepostGrid({
       <RepostPlayer
         reposts={visibleList}
         index={playingIndex}
+        trackingSince={trackingSince}
         onClose={() => setPlayingIndex(null)}
         onIndexChange={setPlayingIndex}
       />

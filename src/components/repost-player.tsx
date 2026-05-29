@@ -13,7 +13,12 @@ import {
   ChevronDown,
 } from "lucide-react";
 import type { Repost } from "@/lib/tiktok";
-import { formatCount, formatRelativeTime } from "@/lib/format";
+import {
+  formatCount,
+  formatRelativeTime,
+  isObservedRepost,
+  msToRelative,
+} from "@/lib/format";
 
 function proxied(url: string): string {
   if (!url) return "";
@@ -23,16 +28,25 @@ function proxied(url: string): string {
 export function RepostPlayer({
   reposts,
   index,
+  trackingSince,
   onClose,
   onIndexChange,
 }: {
   reposts: Repost[];
   index: number | null;
+  trackingSince?: number;
   onClose: () => void;
   onIndexChange: (next: number) => void;
 }) {
   const open = index !== null && index >= 0 && index < reposts.length;
   const repost = open ? reposts[index] : null;
+  const observed = repost
+    ? isObservedRepost({
+        firstSeenAt: repost.firstSeenAt,
+        trackingSince,
+        feedPosition: repost.feedPosition,
+      })
+    : false;
   const wheelLockRef = useRef(0);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -265,12 +279,15 @@ export function RepostPlayer({
                 )}
               </p>
 
-              {/* Repost timing. TikTok's anonymous endpoint usually does not
-                  expose the exact repost timestamp. When it does, show it.
-                  Otherwise fall back to feed position. */}
-              <div className="flex items-center gap-2 text-[11.5px] text-white/50">
+              {/* Repost timing. TikTok never reports the repost timestamp on
+                  the anonymous endpoint, so we degrade gracefully:
+                  1. TikTok-reported repostedAt (rare) — exact.
+                  2. Observed: first appeared at the head of the feed after we
+                     began watching ≈ reposted then (bounded by scrape cadence).
+                  3. Feed position — pure rank, no time. */}
+              <div className="flex flex-col gap-1 text-[11.5px] text-white/50">
                 {repost.repostedAt > 0 ? (
-                  <>
+                  <span className="flex items-center gap-2">
                     <span className="h-1.5 w-1.5 rounded-full bg-[#25f4ee]" />
                     <span>
                       Reposted{" "}
@@ -278,18 +295,34 @@ export function RepostPlayer({
                         {formatRelativeTime(repost.repostedAt)}
                       </span>
                     </span>
+                  </span>
+                ) : observed ? (
+                  <>
+                    <span className="flex items-center gap-2">
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#25f4ee]" />
+                      <span>
+                        Reposted{" "}
+                        <span className="text-white">
+                          ~{msToRelative(repost.firstSeenAt!)}
+                        </span>
+                      </span>
+                    </span>
+                    <span className="pl-3.5 text-[10.5px] text-white/35">
+                      first seen at the top of their feed — we don&apos;t get
+                      TikTok&apos;s exact repost time
+                    </span>
                   </>
                 ) : (
-                  <>
+                  <span className="flex items-center gap-2">
                     <span className="h-1.5 w-1.5 rounded-full bg-white/30" />
                     <span>
                       Position{" "}
                       <span className="text-white/80 tnum">
-                        #{(index ?? 0) + 1}
+                        #{(repost.feedPosition ?? index ?? 0) + 1}
                       </span>{" "}
                       in their reposts
                     </span>
-                  </>
+                  </span>
                 )}
               </div>
 

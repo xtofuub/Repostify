@@ -93,9 +93,9 @@ export function putProfile(username: string, profile: ProfileRow): void {
 export function getCachedReposts(username: string, limit?: number): Repost[] {
   const stmt = open().prepare<
     [string],
-    { json: string }
+    { json: string; first_seen_at: number; last_seen_at: number }
   >(
-    `SELECT json FROM reposts WHERE owner = ? ORDER BY position ASC${
+    `SELECT json, first_seen_at, last_seen_at FROM reposts WHERE owner = ? ORDER BY position ASC${
       limit ? " LIMIT " + Math.max(1, Math.floor(limit)) : ""
     }`,
   );
@@ -103,12 +103,53 @@ export function getCachedReposts(username: string, limit?: number): Repost[] {
   const out: Repost[] = [];
   for (const r of rows) {
     try {
-      out.push(rehydrate(JSON.parse(r.json) as StoredRepost));
+      const item = rehydrate(JSON.parse(r.json) as StoredRepost);
+      // Columns are the source of truth for observation timing — overlay them
+      // onto the rehydrated item (they are stripped from the stored JSON).
+      item.firstSeenAt = r.first_seen_at;
+      item.lastSeenAt = r.last_seen_at;
+      out.push(item);
     } catch {
       // skip malformed row
     }
   }
   return out;
+}
+
+// Earliest moment we recorded any repost for this account — i.e. when we
+// started watching. The min first_seen_at across all rows. Lets the UI say
+// "tracking since X" and decide which reposts appeared *after* that baseline
+// (a usable repost-time proxy) versus the initial bulk capture (unknown time).
+export function getTrackingSince(username: string): number | null {
+  const row = open()
+    .prepare<[string], { ts: number | null }>(
+      "SELECT MIN(first_seen_at) AS ts FROM reposts WHERE owner = ?",
+    )
+    .get(username.toLowerCase());
+  return row?.ts ?? null;
+}
+
+// id → first/last seen timestamps for every cached repost of this account.
+// Used to stamp a fresh scrape's items with their observation history right
+// after we persist them, so the live response carries the same timing the
+// cache-served path does.
+export function getSeenTimestamps(
+  username: string,
+): Map<string, { firstSeenAt: number; lastSeenAt: number }> {
+  const rows = open()
+    .prepare<
+      [string],
+      { repost_id: string; first_seen_at: number; last_seen_at: number }
+    >("SELECT repost_id, first_seen_at, last_seen_at FROM reposts WHERE owner = ?")
+    .all(username.toLowerCase());
+  const m = new Map<string, { firstSeenAt: number; lastSeenAt: number }>();
+  for (const r of rows) {
+    m.set(r.repost_id, {
+      firstSeenAt: r.first_seen_at,
+      lastSeenAt: r.last_seen_at,
+    });
+  }
+  return m;
 }
 
 export function getCachedIdSet(username: string): Set<string> {
@@ -213,11 +254,19 @@ export function saveRepostsOrdered(
     for (let i = 0; i < ordered.length; i++) {
       const item = ordered[i];
       const prior = seenFirst.get(owner, item.id);
+      // Observation timing + the transient feed index live in columns / are
+      // render-only; don't bake them into the stored JSON where they'd go
+      // stale. getCachedReposts overlays the column values back on read.
+      const { firstSeenAt: _f, lastSeenAt: _l, feedPosition: _p, ...persist } =
+        item;
+      void _f;
+      void _l;
+      void _p;
       upsert.run({
         owner,
         id: item.id,
         pos: i,
-        json: JSON.stringify(item satisfies StoredRepost),
+        json: JSON.stringify(persist satisfies StoredRepost),
         first: prior?.first_seen_at ?? now,
         now,
       });
