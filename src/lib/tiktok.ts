@@ -90,6 +90,10 @@ export type ScrapeResult = {
   // uses it to label observed repost timing and to set expectations ("tracking
   // since X — re-scan to sharpen timing").
   trackingSince?: number;
+  // Total reposts recorded by the last completed "All" walk for this account,
+  // if one exists. Lets a limited view (e.g. first 60) tell the user how many
+  // reposts the account actually has and offer to load them all.
+  knownTotal?: number;
   debug?: {
     finalUrl: string;
     title: string;
@@ -355,6 +359,7 @@ function buildResultFromCache(
     loggedIn,
     fetchedAt,
     trackingSince: getTrackingSince(username) ?? undefined,
+    knownTotal: getCachedAllScrapeRun(username)?.itemCount,
   };
 }
 
@@ -1019,6 +1024,13 @@ export async function scrapeReposts(
     loggedIn,
     fetchedAt: Date.now(),
     trackingSince,
+    // Prefer this walk's own total when it was an unbounded ("All") walk;
+    // otherwise fall back to the last recorded All run so a limited view still
+    // knows the real count.
+    knownTotal:
+      finiteMaxItems === null && merged.length > 0
+        ? merged.length
+        : getCachedAllScrapeRun(username)?.itemCount,
   };
 
   if (DEBUG) {

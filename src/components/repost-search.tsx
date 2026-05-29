@@ -126,17 +126,18 @@ export function RepostSearch({
   const [state, setState] = useState<State>({ kind: "idle" });
   const autoRanRef = useRef(false);
 
-  async function run(rawUsername: string) {
+  async function run(rawUsername: string, limitOverride?: number) {
     const username = rawUsername.replace(/^@/, "").trim();
     if (!username) {
       toast.error("Enter a TikTok username");
       return;
     }
+    const effLimit = limitOverride ?? limit;
     setState({ kind: "loading", username });
     try {
       const url = new URL("/api/reposts", window.location.origin);
       url.searchParams.set("username", username);
-      if (limit > 0) url.searchParams.set("limit", String(limit));
+      if (effLimit > 0) url.searchParams.set("limit", String(effLimit));
       const res = await fetch(url.toString(), { cache: "no-store" });
       const json = await res.json();
       if (!res.ok) {
@@ -242,7 +243,14 @@ export function RepostSearch({
             exit={{ opacity: 0, y: -16 }}
             transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
           >
-            <Results data={state.data} aggregates={aggregates} />
+            <Results
+              data={state.data}
+              aggregates={aggregates}
+              onLoadAll={() => {
+                setLimit(0);
+                run(state.data.username, 0);
+              }}
+            />
           </motion.div>
         )}
       </AnimatePresence>
@@ -511,9 +519,11 @@ function SortMenu({
 function Results({
   data,
   aggregates,
+  onLoadAll,
 }: {
   data: ScrapeResult;
   aggregates: Aggregates | null;
+  onLoadAll: () => void;
 }) {
   const { profile, username } = data;
   const [keywords, setKeywords] = useState<string[]>([]);
@@ -656,7 +666,13 @@ function Results({
         />
       )}
 
-      {data.hasMore && <PartialBanner count={reposts.length} />}
+      {data.hasMore && (
+        <PartialBanner
+          count={reposts.length}
+          captcha={data.captchaSuspected}
+          onLoadAll={onLoadAll}
+        />
+      )}
 
       {aggregates && aggregates.topCreators.length > 0 && (
         <TopCreators
@@ -685,6 +701,8 @@ function Results({
         trackingSince={data.trackingSince}
         sort={sort}
         onSortChange={setSort}
+        knownTotal={data.knownTotal}
+        onLoadAll={onLoadAll}
       />
     </div>
   );
@@ -1247,6 +1265,8 @@ function RepostGrid({
   trackingSince,
   sort,
   onSortChange,
+  knownTotal,
+  onLoadAll,
 }: {
   reposts: Repost[];
   visibilityMask?: boolean[];
@@ -1254,11 +1274,15 @@ function RepostGrid({
   trackingSince?: number;
   sort: SortKey;
   onSortChange: (k: SortKey) => void;
+  knownTotal?: number;
+  onLoadAll?: () => void;
 }) {
   const [playingIndex, setPlayingIndex] = useState<number | null>(null);
   const total = reposts.length;
   const showing = matchedCount ?? total;
   const filtered = visibilityMask && showing < total;
+  // The account has more reposts than we've loaded into this view.
+  const moreAvailable = knownTotal != null && knownTotal > total;
 
   // Visible-only list passed to the player so prev/next skip hidden cards.
   const visibleList = useMemo(() => {
@@ -1285,14 +1309,25 @@ function RepostGrid({
       <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
         <p className="text-[11px] uppercase tracking-[0.22em] text-white/55">
           Reel ·{" "}
-          {filtered
-            ? `${showing} of ${total} items`
-            : `${showing} item${showing === 1 ? "" : "s"}`}
+          {moreAvailable
+            ? `${formatCount(total)} of ${formatCount(knownTotal!)} reposts`
+            : filtered
+              ? `${showing} of ${total} items`
+              : `${showing} item${showing === 1 ? "" : "s"}`}
         </p>
         <div className="flex items-center gap-3">
-          <p className="hidden md:block text-[11px] uppercase tracking-[0.18em] text-white/40">
+          <p className="hidden lg:block text-[11px] uppercase tracking-[0.18em] text-white/40">
             click to play · arrows to navigate
           </p>
+          {moreAvailable && onLoadAll && (
+            <button
+              type="button"
+              onClick={onLoadAll}
+              className="inline-flex items-center gap-1.5 h-9 rounded-lg border border-[#25f4ee]/30 bg-[#25f4ee]/10 hover:bg-[#25f4ee]/20 px-3 text-[12px] font-medium text-[#25f4ee] transition-colors cursor-pointer"
+            >
+              Load all {formatCount(knownTotal!)}
+            </button>
+          )}
           <SortMenu value={sort} onChange={onSortChange} />
         </div>
       </div>
@@ -1346,15 +1381,46 @@ function RepostGrid({
   );
 }
 
-function PartialBanner({ count }: { count: number }) {
-  return (
-    <div className="rounded-2xl border border-[#ff2d8a]/30 bg-[#ff2d8a]/[0.06] px-5 py-4 flex items-start gap-3">
-      <TriangleAlert className="h-4 w-4 mt-0.5 flex-none text-[#ff2d8a]" />
-      <div className="text-[13.5px] text-white/70 leading-[1.6]">
-        <span className="text-white font-medium">Cut at the gate.</span>{" "}
-        TikTok showed a captcha after the first batch of {count} items. Going
-        further would need a paid captcha solver, a different product entirely.
+function PartialBanner({
+  count,
+  captcha,
+  onLoadAll,
+}: {
+  count: number;
+  captcha?: boolean;
+  onLoadAll?: () => void;
+}) {
+  // Captcha is a hard stop — nothing the user can do without a solver.
+  if (captcha) {
+    return (
+      <div className="rounded-2xl border border-[#ff2d8a]/30 bg-[#ff2d8a]/[0.06] px-5 py-4 flex items-start gap-3">
+        <TriangleAlert className="h-4 w-4 mt-0.5 flex-none text-[#ff2d8a]" />
+        <div className="text-[13.5px] text-white/70 leading-[1.6]">
+          <span className="text-white font-medium">Cut at the gate.</span>{" "}
+          TikTok showed a captcha after the first batch of {count} items. Going
+          further would need a paid captcha solver, a different product
+          entirely.
+        </div>
       </div>
+    );
+  }
+  // Otherwise the walk just stopped short of the end — more is loadable.
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-5 py-4 flex items-center gap-3 flex-wrap">
+      <TriangleAlert className="h-4 w-4 flex-none text-white/45" />
+      <div className="flex-1 min-w-[12rem] text-[13.5px] text-white/70 leading-[1.6]">
+        <span className="text-white font-medium">More to load.</span> Showing the
+        first {count}. This account has reposted more than what&apos;s on screen.
+      </div>
+      {onLoadAll && (
+        <button
+          type="button"
+          onClick={onLoadAll}
+          className="inline-flex items-center gap-1.5 h-9 rounded-lg border border-[#25f4ee]/30 bg-[#25f4ee]/10 hover:bg-[#25f4ee]/20 px-3 text-[12px] font-medium text-[#25f4ee] transition-colors cursor-pointer"
+        >
+          Load all
+        </button>
+      )}
     </div>
   );
 }
