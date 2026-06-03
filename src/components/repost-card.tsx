@@ -14,6 +14,17 @@ function proxied(url: string): string {
   return "/api/img?u=" + encodeURIComponent(url);
 }
 
+// Cover source with an oEmbed fallback: pass the stable video id (cache key)
+// and the video URL so the proxy can re-resolve a fresh thumbnail when the
+// signed cover URL has expired (deep-feed items 403 within hours).
+function coverSrc(repost: Repost): string {
+  const p = new URLSearchParams();
+  if (repost.cover) p.set("u", repost.cover);
+  p.set("v", repost.id);
+  if (repost.webUrl) p.set("o", repost.webUrl);
+  return "/api/img?" + p.toString();
+}
+
 export function RepostCard({
   repost,
   trackingSince,
@@ -40,10 +51,10 @@ export function RepostCard({
         aria-label={`Play repost by @${repost.author.uniqueId}`}
       >
         <div className="relative aspect-[9/16] overflow-hidden bg-black/40">
-          {repost.cover && !coverBroken ? (
+          {(repost.cover || repost.webUrl) && !coverBroken ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={proxied(repost.cover)}
+              src={coverSrc(repost)}
               alt={repost.desc.slice(0, 80) || `Repost ${repost.id}`}
               loading="lazy"
               referrerPolicy="no-referrer"
