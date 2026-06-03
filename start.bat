@@ -28,4 +28,7 @@ rem Single line — no caret continuation (a trailing space after ^ would break 
 start "" powershell -NoProfile -Command "for($i=0;$i -lt 90;$i++){try{ if((Invoke-WebRequest -UseBasicParsing http://localhost:3000 -TimeoutSec 2).StatusCode -eq 200){ Start-Process 'http://localhost:3000'; break } }catch{}; Start-Sleep -Milliseconds 800 }"
 
 rem Pin to port 3000 so the URL above always matches the running server.
-call %PM% run dev -- -p 3000
+rem Use the PORT env var, not "-- -p 3000": pnpm forwards "--" literally and
+rem next dev then treats "-p" as the project directory and aborts.
+set "PORT=3000"
+call %PM% run dev
