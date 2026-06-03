@@ -393,19 +393,29 @@ export async function scrapeReposts(
   const loggedIn = storageState !== undefined;
 
   // Stale-while-revalidate (finite request): when the DB already holds enough
-  // reposts to satisfy the limit, return instantly + refresh the head in the
-  // background.
+  // reposts to satisfy the limit AND the cache is recent, return instantly and
+  // refresh the head in the background. If the cache is older than the TTL we
+  // fall through to a live scrape instead — otherwise an "Analyze" would keep
+  // returning stale data (the background refresh only lands in the DB for the
+  // *next* request) and stale cover URLs (TikTok signs them with x-expires)
+  // would render as broken thumbnails. The live path is incremental: it walks
+  // the new head and stops once it hits the known cache, so it stays fast.
+  const CACHE_TTL_MS = 3 * 60_000;
   if (!opts.bypassCache && finiteMaxItems !== null) {
     const cached = getCachedReposts(username, finiteMaxItems);
     if (cached.length >= finiteMaxItems) {
       const cachedProfileRow = getCachedProfile(username);
-      scheduleBackgroundRefresh(username, loggedIn);
-      return buildResultFromCache(
-        username,
-        cached,
-        loggedIn,
-        cachedProfileRow?.fetchedAt ?? Date.now(),
-      );
+      const age = Date.now() - (cachedProfileRow?.fetchedAt ?? 0);
+      if (age < CACHE_TTL_MS) {
+        scheduleBackgroundRefresh(username, loggedIn);
+        return buildResultFromCache(
+          username,
+          cached,
+          loggedIn,
+          cachedProfileRow?.fetchedAt ?? Date.now(),
+        );
+      }
+      // else: stale — fall through to a live incremental scrape below.
     }
   }
 
