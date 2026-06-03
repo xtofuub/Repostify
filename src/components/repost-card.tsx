@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { ExternalLink, Heart, MessageCircle, Play, Share2 } from "lucide-react";
 import type { Repost } from "@/lib/tiktok";
 import {
@@ -27,6 +28,9 @@ export function RepostCard({
     trackingSince,
     feedPosition: repost.feedPosition,
   });
+  // TikTok signs cover URLs with x-expires; a stale cached cover 502s through
+  // the proxy. Fall back to the play-icon placeholder instead of a blank tile.
+  const [coverBroken, setCoverBroken] = useState(false);
   return (
     <div className="group relative rounded-xl overflow-hidden border border-white/10 bg-white/[0.015] transition-[transform,border-color] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1 hover:border-white/25">
       <button
@@ -36,7 +40,7 @@ export function RepostCard({
         aria-label={`Play repost by @${repost.author.uniqueId}`}
       >
         <div className="relative aspect-[9/16] overflow-hidden bg-black/40">
-          {repost.cover ? (
+          {repost.cover && !coverBroken ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={proxied(repost.cover)}
@@ -44,9 +48,7 @@ export function RepostCard({
               loading="lazy"
               referrerPolicy="no-referrer"
               className="h-full w-full object-cover transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.04]"
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).style.opacity = "0";
-              }}
+              onError={() => setCoverBroken(true)}
             />
           ) : (
             <div className="flex h-full items-center justify-center text-white/45">
