@@ -9,8 +9,6 @@ import {
   Share2,
   Play,
   ExternalLink,
-  ChevronUp,
-  ChevronDown,
 } from "lucide-react";
 import type { Repost } from "@/lib/tiktok";
 import {
@@ -25,9 +23,11 @@ function proxied(url: string): string {
   return "/api/img?u=" + encodeURIComponent(url);
 }
 
-function proxiedMedia(url: string): string {
+function proxiedMedia(url: string, postUrl?: string): string {
   if (!url) return "";
-  return "/api/video?u=" + encodeURIComponent(url);
+  const params = new URLSearchParams({ u: url });
+  if (postUrl) params.set("o", postUrl);
+  return `/api/video?${params.toString()}`;
 }
 
 export function RepostPlayer({
@@ -57,6 +57,7 @@ export function RepostPlayer({
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const photoAudioRef = useRef<HTMLAudioElement>(null);
   const [photoState, setPhotoState] = useState({ repostId: "", index: 0 });
+  const [videoFallbackId, setVideoFallbackId] = useState<string | null>(null);
   const imageUrls = repost?.imageUrls ?? [];
   const isPhoto = imageUrls.length > 0;
   const photoIndex = photoState.repostId === repostId ? photoState.index : 0;
@@ -240,13 +241,26 @@ export function RepostPlayer({
                     <audio
                       ref={photoAudioRef}
                       key={`photo-music-${repost.id}`}
-                      src={proxiedMedia(photoMusicUrl)}
+                      src={proxiedMedia(photoMusicUrl, repost.webUrl)}
                       autoPlay
                       loop
                       preload="auto"
                     />
                   )}
                 </button>
+              ) : repost.playUrl && videoFallbackId !== repost.id ? (
+                <video
+                  key={`direct-${repost.id}`}
+                  src={proxiedMedia(repost.playUrl, repost.webUrl)}
+                  poster={repost.cover ? proxied(repost.cover) : undefined}
+                  autoPlay
+                  loop
+                  playsInline
+                  controls
+                  preload="metadata"
+                  onError={() => setVideoFallbackId(repost.id)}
+                  className="h-full w-full bg-black object-contain"
+                />
               ) : repost.id ? (
                 <>
                   <iframe
@@ -398,27 +412,6 @@ export function RepostPlayer({
                   <span className="text-white/45">shares</span>
                 </li>
               </ul>
-
-              <div className="mt-auto flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={goPrev}
-                  disabled={index === null || index <= 0}
-                  className="flex-1 inline-flex items-center justify-center gap-1.5 text-[12px] uppercase tracking-[0.18em] text-white/65 hover:text-white border border-white/15 rounded-full py-2.5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                >
-                  <ChevronUp className="h-3.5 w-3.5" />
-                  Prev
-                </button>
-                <button
-                  type="button"
-                  onClick={goNext}
-                  disabled={index === null || index >= reposts.length - 1}
-                  className="flex-1 inline-flex items-center justify-center gap-1.5 text-[12px] uppercase tracking-[0.18em] text-white/65 hover:text-white border border-white/15 rounded-full py-2.5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                >
-                  Next
-                  <ChevronDown className="h-3.5 w-3.5" />
-                </button>
-              </div>
 
               <a
                 href={repost.webUrl}

@@ -49,6 +49,7 @@ function copyRuntime() {
   });
   for (const file of [
     "main.cjs",
+    "app-preload.cjs",
     "update-preload.cjs",
     "update-renderer.js",
     "update.html",
@@ -63,6 +64,8 @@ function copyRuntime() {
       {
         name: rootPackage.name,
         version: rootPackage.version,
+        description: rootPackage.description,
+        author: rootPackage.author,
         private: true,
         main: "main.cjs",
       },

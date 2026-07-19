@@ -37,7 +37,7 @@ Counts how many times each original creator appears in the feed, ranked.
 
 ### Inline player
 
-Click any cover → full-screen overlay with TikTok's embed player + caption, stats, position counter, and prev/next nav.
+Click any cover → full-screen overlay with direct video playback + caption, stats, and author details. If a direct stream expires, the player falls back to TikTok's embed.
 
 <p align="center">
   <img src=".github/assets/07-player.png" alt="Inline TikTok player" width="900" />
@@ -65,6 +65,9 @@ Click any cover → full-screen overlay with TikTok's embed player + caption, st
 - **Direct-cursor pagination** — After the first XHR fires, subsequent pages are fetched via the captured URL template, not by scrolling. Roughly 35% faster on big feeds.
 - **Image proxy** — TikTok blocks hotlinks; all thumbnails route through `/api/img` with the Referer header set.
 - **SEO** — Dynamic per-handle metadata, JSON-LD (`WebApplication`, `FAQPage`, `BreadcrumbList`, `Article`), sitemap with curated popular handles, `robots.txt`.
+
+- **Fast local scan cache** — Successful scans are stored as plain JSON for 15 minutes. Repeat the same handle and fetch limit for an instant result, use **Scan fresh** to bypass it, or clear everything from Settings.
+- **Desktop settings** — See the installed version and build type, check for updates, manage the TikTok connection, inspect or clear cache usage, and open the local diagnostics folder.
 
 ## How the scraper works
 
@@ -144,7 +147,9 @@ The files are written to:
 - `release/Repostify-<version>-Windows-x64-Portable.exe`
 
 It runs the Next.js server locally, opens it in a hardened Electron window, and
-stores session data and logs under the current Windows user's app-data folder.
+stores session data, short-lived JSON scan cache, and logs under the current
+Windows user's app-data folder. The Settings page can clear scan cache without
+touching the TikTok connection.
 The packaged app checks the GitHub Releases page when it starts. When a newer
 version exists, the in-app update window shows the download and verification
 progress. Choose **Update now** and leave the window open. The installed build
@@ -153,6 +158,9 @@ can take a few minutes to unpack it. The portable build replaces the original
 portable EXE in place and then reopens it, so an old shortcut cannot start the
 previous version again. Every download is verified against GitHub's SHA-256
 digest before it is allowed to run.
+
+You can also open **Settings → App → Check for updates** at any time. The same
+verified updater window is used for both automatic and manual checks.
 
 ### Debug mode
 
@@ -165,13 +173,14 @@ Dumps the raw first XHR response, full page HTML, and a viewport screenshot into
 ## API
 
 ```
-GET /api/reposts?username=<handle>&limit=<n>
+GET /api/reposts?username=<handle>&limit=<n>&refresh=<0|1>
 ```
 
 | Param      | Notes                                                |
 | ---------- | ---------------------------------------------------- |
 | `username` | Required. TikTok handle without `@`.                 |
 | `limit`    | Optional integer. Omit or `0` = no cap. Max 5000.    |
+| `refresh`  | Optional. `1` bypasses the 15-minute local scan cache. |
 
 Returns:
 
@@ -215,6 +224,8 @@ src/
 ```
 
 ## Limitations
+
+- **Connected private profiles** — TikTok Web can return access code `10222` even for an approved account. Repostify cannot scrape cards the web page never renders.
 
 - **Private reposts tabs** — Many accounts hide it. That's a TikTok setting; can't bypass without auth.
 - **Repost timestamps** — TikTok's anonymous endpoint exposes only the original video's createTime, not when the user reposted it. Order in the feed (most-recent-first) is the only repost-recency signal.

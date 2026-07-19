@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowUpRight, Users } from "lucide-react";
+import { ArrowUpRight, Settings, Users } from "lucide-react";
 import {
   BackgroundVideo,
   GuideLines,
@@ -22,7 +22,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "Do I need a TikTok account?",
-    a: "No. The scraper walks the public profile page like any visitor would. Nothing is logged in, nothing is stored.",
+    a: "Not for public profiles. The desktop app can optionally connect your TikTok session for profiles that require login. Session data stays on your device.",
   },
   {
     q: "The result was empty. What happened?",
@@ -123,15 +123,13 @@ function Navbar() {
           <span className="hidden md:inline">
             <TikTokConnect />
           </span>
-          <a
-            href="https://www.tiktok.com/"
-            target="_blank"
-            rel="noreferrer"
-            className="hidden sm:inline-flex items-center gap-1.5 text-[12px] uppercase tracking-[0.22em] text-white/45 hover:text-white transition-colors"
+          <Link
+            href="/settings"
+            className="inline-flex items-center gap-1.5 text-[12px] uppercase tracking-[0.18em] text-white/45 hover:text-white transition-colors"
           >
-            On TikTok
-            <ArrowUpRight className="h-3.5 w-3.5" />
-          </a>
+            <Settings className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Settings</span>
+          </Link>
         </div>
       </div>
     </nav>
@@ -170,8 +168,8 @@ function Hero() {
             <ArrowUpRight className="h-3.5 w-3.5 opacity-60 group-hover:opacity-100 transition-opacity" />
           </Link>
           <p className="max-w-[44rem] mx-auto text-center text-[12px] leading-[1.6] text-white/45">
-            Public profiles only. No login. An empty result means the
-            profile&apos;s reposts tab is set to private.
+            Public profiles work without login. Desktop users can connect
+            TikTok for profiles their account is allowed to view.
           </p>
         </div>
       </div>
@@ -253,8 +251,8 @@ function Footer() {
             </span>
           </div>
           <p className="mt-3 text-[13px] leading-[1.65] text-white/55 max-w-[42ch]">
-            A read-only tool for viewing public TikTok reposts. No login, no
-            API key, nothing stored.
+            A read-only tool for viewing TikTok reposts. Successful scans use a
+            short local cache, removable anytime in Settings.
           </p>
         </div>
         <nav className="col-span-12 sm:col-span-6 sm:text-right">
@@ -287,6 +285,11 @@ function Footer() {
                 Privacy
               </Link>
             </li>
+            <li>
+              <Link href="/settings" className="hover:text-white transition-colors">
+                Settings
+              </Link>
+            </li>
           </ul>
         </nav>
       </div>
@@ -294,7 +297,7 @@ function Footer() {
         <div className="max-w-[78rem] mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-white/40">
           <p>© {new Date().getFullYear()} Repostify</p>
           <p className="tracking-[0.18em] uppercase">
-            v1.0 · public profiles only
+            Public profiles · local cache
           </p>
         </div>
       </div>

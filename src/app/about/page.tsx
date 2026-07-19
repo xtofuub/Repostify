@@ -78,15 +78,20 @@ export default function AboutPage() {
               any visitor, dismisses the cookie banner, clicks the reposts
               tab, and intercepts TikTok&apos;s own feed request as it goes
               over the wire. The data on screen here is the data the page
-              would have shown a person scrolling. We do not call any
-              undocumented API. We do not log in. We do not store anything.
+              would have shown a person scrolling. Public scans work without a
+              TikTok account; the desktop app can optionally reuse a TikTok
+              session for profiles that require login.
+            </p>
+            <p>
+              Successful desktop scans are cached locally for 15 minutes so a
+              repeat fetch is instant. The cache is plain JSON, not a native
+              database, and can be cleared from Settings at any time.
             </p>
             <p>
               Images and thumbnails are hot-link protected on TikTok&apos;s
               CDN, so they are streamed through a server-side proxy that
-              sets the right Referer header. Video playback uses
-              TikTok&apos;s own public embed player, which handles its own
-              authentication.
+              sets the right Referer header. Video playback prefers a direct
+              proxied stream, with TikTok&apos;s public embed player as a fallback.
             </p>
             <h2 className="font-display text-[clamp(1.6rem,3vw,2.2rem)] leading-[1.05] tracking-[-0.015em] pt-6 text-white">
               What it does not do

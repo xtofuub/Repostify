@@ -10,7 +10,7 @@ import { canonical, SITE_NAME } from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: "Privacy",
-  description: `${SITE_NAME} does not log in to TikTok, does not store user data, and does not require an account. This page documents what the tool does and does not collect.`,
+  description: `${SITE_NAME} has no user accounts. The desktop app can keep a TikTok session and short-lived scan cache locally on your device.`,
   alternates: { canonical: canonical("/privacy") },
 };
 
@@ -50,9 +50,9 @@ export default function PrivacyPage() {
               Accounts
             </h2>
             <p>
-               Repostify has no user accounts. There is no sign-up, no
-              login, no password. You use the tool by typing a TikTok
-              handle into the search box on the home page.
+              Repostify has no user accounts, sign-up, or password. The desktop
+              app can optionally connect an existing TikTok session to view
+              profiles that account is allowed to access.
             </p>
 
             <h2 className="font-display text-[clamp(1.4rem,2.6vw,2rem)] pt-4 text-white">
@@ -72,33 +72,32 @@ export default function PrivacyPage() {
               What gets stored
             </h2>
             <p>
-              Nothing about you, the user. We do not store search history,
-              we do not store the handles you have looked up, and we do
-              not store the contents of any repost feed across sessions.
-              Each search opens a fresh browser session against TikTok and
-              the data lives only in the response that comes back to your
-              browser.
+              The desktop app stores successful scan results as local JSON for
+              15 minutes so repeating the same fetch is instant. It can also
+              store your TikTok session and local troubleshooting logs. These
+              files stay in Repostify&apos;s app-data folder. Clear cached scans
+              from Settings and disconnect TikTok whenever you want.
             </p>
 
             <h2 className="font-display text-[clamp(1.4rem,2.6vw,2rem)] pt-4 text-white">
               Third parties
             </h2>
             <p>
-              Video playback uses TikTok&apos;s own embed iframe, which
-              loads from tiktok.com. That iframe runs TikTok&apos;s own
-              tracking inside its own context, which is governed by their
-              privacy policy. We have no access to anything inside the
-              iframe.
+              Video playback prefers a short-lived TikTok media URL proxied
+              through the local app. If that stream is unavailable, playback
+              falls back to TikTok&apos;s embed iframe and its availability rules.
+              We have no access to anything inside the cross-origin iframe.
             </p>
 
             <h2 className="font-display text-[clamp(1.4rem,2.6vw,2rem)] pt-4 text-white">
               Cookies
             </h2>
             <p>
-               Repostify itself does not set any cookies. Your browser
-              may receive cookies from third parties (the embedded TikTok
-              player, the CDN serving fonts) when content from those
-              parties loads.
+              Repostify does not use cookies for its own accounts or tracking.
+              If you connect TikTok in the desktop app, TikTok&apos;s session
+              cookies are saved locally so future browser scans use that
+              identity. Embedded TikTok players can also receive TikTok cookies
+              inside their own context.
             </p>
 
             <h2 className="font-display text-[clamp(1.4rem,2.6vw,2rem)] pt-4 text-white">

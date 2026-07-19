@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { Settings } from "lucide-react";
 import {
   BackgroundVideo,
   GuideLines,
@@ -78,12 +79,21 @@ export default async function ComparePage({
               Repostify
             </span>
           </Link>
-          <Link
-            href="/"
-            className="text-[12px] uppercase tracking-[0.22em] text-white/55 hover:text-white transition-colors"
-          >
-            Single search
-          </Link>
+          <div className="flex items-center gap-5">
+            <Link
+              href="/"
+              className="text-[12px] uppercase tracking-[0.22em] text-white/55 hover:text-white transition-colors"
+            >
+              Single search
+            </Link>
+            <Link
+              href="/settings"
+              aria-label="Settings"
+              className="text-white/45 transition-colors hover:text-white"
+            >
+              <Settings className="h-4 w-4" />
+            </Link>
+          </div>
         </nav>
 
         <main className="flex-1">
@@ -121,6 +131,9 @@ export default async function ComparePage({
               </Link>
               <Link href="/privacy" className="hover:text-white transition-colors">
                 Privacy
+              </Link>
+              <Link href="/settings" className="hover:text-white transition-colors">
+                Settings
               </Link>
             </div>
           </div>

@@ -166,6 +166,7 @@ function openWindow(url) {
     },
     roundedCorners: true,
     webPreferences: {
+      preload: path.join(__dirname, "app-preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -511,14 +512,23 @@ async function launchUpdate(updateFile, latestVersion) {
 }
 
 async function checkForUpdates() {
+  const currentVersion = app.getVersion();
   if (
-    updateCheckRunning ||
     !app.isPackaged ||
     process.platform !== "win32" ||
     !mainWindow ||
     mainWindow.isDestroyed()
   ) {
-    return;
+    return {
+      status: "unavailable",
+      currentVersion,
+      message: app.isPackaged
+        ? "Update checks are unavailable right now."
+        : "Update checks are enabled in packaged Windows builds.",
+    };
+  }
+  if (updateCheckRunning) {
+    return { status: "busy", currentVersion };
   }
   updateCheckRunning = true;
   let updateUi = null;
@@ -533,20 +543,36 @@ async function checkForUpdates() {
     if (!response.ok) throw new Error(`GitHub returned HTTP ${response.status}.`);
     const release = await response.json();
     const latestVersion = String(release.tag_name ?? "").replace(/^v/i, "");
-    if (!latestVersion || !isNewerVersion(latestVersion, app.getVersion())) return;
+    if (!latestVersion || !isNewerVersion(latestVersion, currentVersion)) {
+      return {
+        status: "up-to-date",
+        currentVersion,
+        latestVersion: latestVersion || currentVersion,
+      };
+    }
 
     const wanted = isPortableBuild() ? /Portable\.exe$/i : /Setup\.exe$/i;
     const asset = Array.isArray(release.assets)
       ? release.assets.find((item) => wanted.test(String(item.name ?? "")))
       : null;
-    if (!asset) return;
+    if (!asset) {
+      throw new Error(
+        `Repostify v${latestVersion} has no matching Windows ${isPortableBuild() ? "Portable" : "Setup"} asset.`,
+      );
+    }
 
     updateUi = createUpdateWindow({
       currentVersion: app.getVersion(),
       latestVersion,
       asset,
     });
-    if ((await updateUi.waitForAction()) !== "update") return;
+    if ((await updateUi.waitForAction()) !== "update") {
+      return {
+        status: "available",
+        currentVersion,
+        latestVersion,
+      };
+    }
 
     const abortController = new AbortController();
     updateUi.setCancelDownload(() => abortController.abort());
@@ -566,6 +592,11 @@ async function checkForUpdates() {
     await launchUpdate(updateFile, latestVersion);
     quitting = true;
     setTimeout(() => app.quit(), 700).unref();
+    return {
+      status: "available",
+      currentVersion,
+      latestVersion,
+    };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (updateUi && error?.name !== "AbortError") {
@@ -576,13 +607,54 @@ async function checkForUpdates() {
         updateUi.close();
         retryRequested = true;
       }
+    } else if (error?.name !== "AbortError") {
+      appendUpdateLog(`Update check failed: ${message}`);
     }
+    return {
+      status: "error",
+      currentVersion,
+      message,
+    };
   } finally {
     if (quitting) return;
     updateCheckRunning = false;
     if (retryRequested) setTimeout(() => void checkForUpdates(), 0).unref();
   }
 }
+
+function isMainRenderer(event) {
+  return Boolean(
+    mainWindow &&
+      !mainWindow.isDestroyed() &&
+      event.sender === mainWindow.webContents,
+  );
+}
+
+ipcMain.handle("repostify:app-info", (event) => {
+  if (!isMainRenderer(event)) throw new Error("Untrusted renderer.");
+  return {
+    version: app.getVersion(),
+    buildType: app.isPackaged
+      ? isPortableBuild()
+        ? "Portable"
+        : "Setup"
+      : "Development",
+    packaged: app.isPackaged,
+    platform: process.platform,
+    autoUpdateChecks: app.isPackaged && process.platform === "win32",
+  };
+});
+
+ipcMain.handle("repostify:check-for-updates", (event) => {
+  if (!isMainRenderer(event)) throw new Error("Untrusted renderer.");
+  return checkForUpdates();
+});
+
+ipcMain.handle("repostify:open-data-folder", async (event) => {
+  if (!isMainRenderer(event)) throw new Error("Untrusted renderer.");
+  const error = await shell.openPath(app.getPath("userData"));
+  return error === "";
+});
 
 app.on("second-instance", () => {
   if (!mainWindow) return;

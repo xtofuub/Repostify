@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { Settings } from "lucide-react";
 import {
   BackgroundVideo,
   GuideLines,
@@ -108,12 +109,21 @@ export default async function HandlePage({
               Repostify
             </span>
           </Link>
-          <Link
-            href="/"
-            className="text-[12px] uppercase tracking-[0.22em] text-white/55 hover:text-white transition-colors"
-          >
-            New search
-          </Link>
+          <div className="flex items-center gap-5">
+            <Link
+              href="/"
+              className="text-[12px] uppercase tracking-[0.22em] text-white/55 hover:text-white transition-colors"
+            >
+              New search
+            </Link>
+            <Link
+              href="/settings"
+              aria-label="Settings"
+              className="text-white/45 transition-colors hover:text-white"
+            >
+              <Settings className="h-4 w-4" />
+            </Link>
+          </div>
         </nav>
 
         <main className="flex-1">

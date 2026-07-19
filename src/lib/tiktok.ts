@@ -78,6 +78,13 @@ export type ScrapeResult = {
   // .tiktok-session.json). False = anonymous scrape.
   loggedIn: boolean;
   fetchedAt: number;
+  cache?: {
+    hit: boolean;
+    stored: boolean;
+    storedAt: number | null;
+    ageMs: number;
+    maxAgeMs: number;
+  };
   // Reserved for callers that add their own observation tracking.
   trackingSince?: number;
   // Total returned by a completed live "All" walk, when requested.
@@ -342,6 +349,67 @@ function loadStorageState(): StorageState | undefined {
     return state;
   } catch {
     return undefined;
+  }
+}
+
+export async function fetchTikTokMediaWithBrowser(
+  targetUrl: string,
+  postUrl: string,
+  timeoutMs = 25_000,
+): Promise<{ body: Buffer; contentType: string }> {
+  const target = new URL(targetUrl);
+  const post = new URL(postUrl);
+  if (
+    !/(^|\.)tiktok\.com$/i.test(post.hostname) ||
+    !/^\/@[A-Za-z0-9._]{1,30}\/(video|photo)\/\d+\/?$/i.test(post.pathname)
+  ) {
+    throw new Error("Invalid TikTok post URL.");
+  }
+
+  const browser = await getBrowser();
+  const storageState = loadStorageState();
+  const context = await browser.newContext({
+    viewport: { width: 1366, height: 900 },
+    deviceScaleFactor: 1,
+    extraHTTPHeaders: { "Accept-Language": "en-US,en;q=0.9" },
+    ...(storageState ? { storageState } : {}),
+  });
+  const page = await context.newPage();
+
+  try {
+    const responsePromise = page.waitForResponse(
+      (response) => {
+        try {
+          const responseUrl = new URL(response.url());
+          const contentType = response.headers()["content-type"] ?? "";
+          return (
+            response.status() >= 200 &&
+            response.status() < 300 &&
+            responseUrl.pathname === target.pathname &&
+            /^(video|audio)\//i.test(contentType)
+          );
+        } catch {
+          return false;
+        }
+      },
+      { timeout: timeoutMs },
+    );
+
+    await page
+      .goto(post.toString(), {
+        waitUntil: "domcontentloaded",
+        timeout: timeoutMs,
+      })
+      .catch(() => null);
+    const response = await responsePromise;
+    const body = await response.body();
+    if (!body.length) throw new Error("TikTok returned an empty media stream.");
+    return {
+      body,
+      contentType: response.headers()["content-type"] ?? "video/mp4",
+    };
+  } finally {
+    await context.close().catch(() => {});
   }
 }
 

@@ -16,6 +16,7 @@ import {
   CalendarRange,
   Check,
   Clock,
+  Database,
   Eye,
   Filter,
   Heart,
@@ -24,6 +25,7 @@ import {
   Search,
   Share2,
   SlidersHorizontal,
+  RotateCcw,
   TriangleAlert,
   Users,
   X,
@@ -44,11 +46,13 @@ async function fetchReposts(
   rawUsername: string,
   limit: number,
   signal?: AbortSignal,
+  forceRefresh = false,
 ): Promise<ScrapeResult> {
   const username = normalizeUsername(rawUsername);
   const url = new URL("/api/reposts", window.location.origin);
   url.searchParams.set("username", username);
   if (limit > 0) url.searchParams.set("limit", String(limit));
+  if (forceRefresh) url.searchParams.set("refresh", "1");
 
   const res = await fetch(url.toString(), { cache: "no-store", signal });
   const json = await res.json();
@@ -62,7 +66,7 @@ type State =
   | { kind: "idle" }
   | { kind: "loading"; username: string }
   | { kind: "error"; message: string; username: string }
-  | { kind: "ok"; data: ScrapeResult };
+  | { kind: "ok"; data: ScrapeResult; limit: number };
 
 type Aggregates = {
   total: number;
@@ -152,7 +156,11 @@ export function RepostSearch({
       : { kind: "idle" };
   });
 
-  async function run(rawUsername: string, limitOverride?: number) {
+  async function run(
+    rawUsername: string,
+    limitOverride?: number,
+    forceRefresh = false,
+  ) {
     const username = normalizeUsername(rawUsername);
     if (!username) {
       toast.error("Enter a TikTok username");
@@ -161,8 +169,13 @@ export function RepostSearch({
     const effLimit = limitOverride ?? limit;
     setState({ kind: "loading", username });
     try {
-      const data = await fetchReposts(username, effLimit);
-      setState({ kind: "ok", data });
+      const data = await fetchReposts(
+        username,
+        effLimit,
+        undefined,
+        forceRefresh,
+      );
+      setState({ kind: "ok", data, limit: effLimit });
     } catch (err) {
       setState({
         kind: "error",
@@ -184,7 +197,7 @@ export function RepostSearch({
 
     const controller = new AbortController();
     void fetchReposts(username, 60, controller.signal)
-      .then((data) => setState({ kind: "ok", data }))
+      .then((data) => setState({ kind: "ok", data, limit: 60 }))
       .catch((err: unknown) => {
         if (controller.signal.aborted) return;
         setState({
@@ -257,13 +270,13 @@ export function RepostSearch({
             <ErrorState
               message={state.message}
               username={state.username}
-              onRetry={() => run(state.username)}
+              onRetry={() => run(state.username, undefined, true)}
             />
           </motion.div>
         )}
         {state.kind === "ok" && (
           <motion.div
-            key={`ok-${state.data.username}`}
+            key={`ok-${state.data.username}-${state.data.cache?.storedAt ?? state.data.fetchedAt}`}
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -16 }}
@@ -275,6 +288,7 @@ export function RepostSearch({
               // One-off unbounded fetch. Don't mutate `limit` — that would make
               // every subsequent search default to a full deep scrape.
               onLoadAll={() => run(state.data.username, 0)}
+              onRefresh={() => run(state.data.username, state.limit, true)}
             />
           </motion.div>
         )}
@@ -545,10 +559,12 @@ function Results({
   data,
   aggregates,
   onLoadAll,
+  onRefresh,
 }: {
   data: ScrapeResult;
   aggregates: Aggregates | null;
   onLoadAll: () => void;
+  onRefresh: () => void;
 }) {
   const { profile, username } = data;
   const [keywords, setKeywords] = useState<string[]>([]);
@@ -714,6 +730,10 @@ function Results({
 
   return (
     <div className="space-y-10">
+      {data.cache && (
+        <CacheNotice cache={data.cache} onRefresh={onRefresh} />
+      )}
+
       {profile && <ProfileCard profile={profile} username={username} />}
 
       {aggregates && <StatRow agg={aggregates} />}
@@ -764,6 +784,45 @@ function Results({
         knownTotal={data.knownTotal}
         onLoadAll={onLoadAll}
       />
+    </div>
+  );
+}
+
+function formatCacheAge(ageMs: number): string {
+  if (ageMs < 60_000) return "just now";
+  const minutes = Math.floor(ageMs / 60_000);
+  if (minutes < 60) return `${minutes}m ago`;
+  return `${Math.floor(minutes / 60)}h ago`;
+}
+
+function CacheNotice({
+  cache,
+  onRefresh,
+}: {
+  cache: NonNullable<ScrapeResult["cache"]>;
+  onRefresh: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-white/8 bg-white/[0.02] px-4 py-3 text-[12.5px] text-white/60">
+      <Database className="h-4 w-4 flex-none text-[#25f4ee]" />
+      <p className="min-w-0 flex-1 leading-[1.5]">
+        <span className="font-medium text-white/85">
+          {cache.hit ? "Cached scan" : "Live scan"}
+        </span>
+        {cache.hit
+          ? ` · saved ${formatCacheAge(cache.ageMs)}`
+          : cache.stored
+            ? " · saved for faster reloads"
+            : " · not cached"}
+      </p>
+      <button
+        type="button"
+        onClick={onRefresh}
+        className="inline-flex h-8 flex-none items-center gap-1.5 rounded-lg border border-white/10 px-2.5 text-[12px] font-medium text-white/70 transition-colors hover:border-white/20 hover:bg-white/[0.05] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#25f4ee]/60"
+      >
+        <RotateCcw className="h-3.5 w-3.5" />
+        Scan fresh
+      </button>
     </div>
   );
 }
@@ -1032,15 +1091,6 @@ function ProfileCard({
           <Stat n={profile.followers} k="followers" />
           <Stat n={profile.following} k="following" />
           <Stat n={profile.likes} k="hearts" />
-          <a
-            href={`https://www.tiktok.com/@${username}`}
-            target="_blank"
-            rel="noreferrer"
-            className="ml-auto inline-flex items-center gap-1.5 text-[12px] text-white/50 hover:text-white transition-colors uppercase tracking-[0.18em]"
-          >
-            On TikTok
-            <ArrowUpRight className="h-3 w-3" />
-          </a>
         </div>
       </div>
     </div>

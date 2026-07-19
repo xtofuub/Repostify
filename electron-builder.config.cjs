@@ -12,6 +12,7 @@ module.exports = {
   },
   files: ["**/*"],
   win: {
+    icon: "desktop/icon.png",
     target: [{ target: "nsis", arch: ["x64"] }],
     artifactName: "Repostify-${version}-Windows-${arch}-Setup.${ext}",
   },
