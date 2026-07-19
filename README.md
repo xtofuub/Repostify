@@ -2,7 +2,7 @@
 
 <p align="center">
   <strong>See every TikTok repost on any public profile.</strong><br/>
-  No login. No API key. No notification to the account you're checking.
+  No login required. No API key. No notification to the account you're checking.
 </p>
 
 <p align="center">
@@ -13,7 +13,7 @@
 
 ## What it does
 
-Paste any public TikTok handle → Repostify opens the profile as an anonymous visitor, walks the reposts tab, and lays every repost out as a playable grid with stats, top-amplified creators, and one-click in-browser video playback.
+Paste any public TikTok handle → Repostify walks the reposts tab and lays every repost out as a playable grid with stats, top-amplified creators, and one-click video or photo-slideshow playback. Connecting TikTok is optional and is used only when a profile requires an approved viewer.
 
 The reposts tab is where someone's taste actually lives. Likes are noise. Posts are performance. Reposts are what they wanted their followers to see. This tool flattens that feed into a single page you can scan in seconds.
 
@@ -55,7 +55,8 @@ Click any cover → full-screen overlay with TikTok's embed player + caption, st
 
 - **Profile overview** — Avatar, bio, follower / following / hearts pulled from the public page rehydration script.
 - **Repost grid** — 9:16 cover thumbnails with duration badge, original creator handle, play overlay, and per-video engagement stats.
-- **Inline player** — TikTok embed iframe + detail panel. Scroll wheel, arrow keys, j/k, or the buttons to navigate.
+- **Inline player** — TikTok video embed or native photo slideshow with its original music, plus a detail panel. Scroll wheel, arrow keys, j/k, or the compact buttons to navigate.
+- **Smart session fallback** — Uses a connected TikTok session when needed, but automatically retries public profiles anonymously when TikTok blocks the connected identity.
 - **Aggregate stats** — Total plays, likes, comments, shares, and unique creators across the captured batch.
 - **Top creators leaderboard** — Frequency-ranked list of every original creator with horizontal bar chart.
 - **Caption filter** — Type a word (`fyp`, `lol`, `edit`) to filter the grid live. Toggle between fuzzy substring and exact-word match. Top extracted hashtags suggested.
@@ -67,17 +68,17 @@ Click any cover → full-screen overlay with TikTok's embed player + caption, st
 
 ## How the scraper works
 
-1. Cloakbrowser launches a stealth Chromium (binary-level fingerprint patches, undetectable as automation).
+1. Cloakbrowser launches a stealth Chromium with source-level fingerprint patches.
 2. Navigates to `https://www.tiktok.com/@<handle>`.
 3. Dismisses the cookie banner via shadow-DOM traversal.
 4. Parses `__UNIVERSAL_DATA_FOR_REHYDRATION__` for profile + initial repost list.
 5. Finds the Reposts tab by `role="tab"` text match, clicks it.
 6. Captures the first `/api/repost/item_list/` XHR as a URL template.
 7. Paginates: each subsequent call hits the same URL with an updated cursor via `page.evaluate(fetch)` (TikTok's own fetch interceptor signs the request).
-8. Detects captcha / private-tab / server-block signals, bails fast.
+8. Detects captcha, private-tab, and TikTok business-status errors. If a connected identity is blocked from a public profile, retries anonymously.
 9. Normalizes, dedupes, sorts by recency.
 
-No login. No undocumented API. The data is everything TikTok would show any anonymous visitor.
+Login is optional. The data is limited to what TikTok Web returns to the anonymous or connected browser session.
 
 ## Tech stack
 
@@ -165,7 +166,7 @@ GET /api/reposts?username=<handle>&limit=<n>
 | Param      | Notes                                                |
 | ---------- | ---------------------------------------------------- |
 | `username` | Required. TikTok handle without `@`.                 |
-| `limit`    | Optional integer. Omit or `0` = no cap. Max 2000.    |
+| `limit`    | Optional integer. Omit or `0` = no cap. Max 5000.    |
 
 Returns:
 

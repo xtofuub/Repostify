@@ -44,7 +44,8 @@ export async function GET(req: NextRequest) {
         Origin: "https://www.tiktok.com",
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
-        Accept: "video/mp4,video/*;q=0.9,*/*;q=0.8",
+        Accept:
+          "audio/mpeg,audio/mp4,audio/*;q=0.9,video/mp4,video/*;q=0.8,*/*;q=0.5",
         ...(range ? { Range: range } : {}),
       },
     });

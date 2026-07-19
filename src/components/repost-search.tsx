@@ -645,6 +645,21 @@ function Results({
         </div>
       );
     }
+    if (data.blockedByAuthor) {
+      return (
+        <div className="rounded-3xl border border-amber-400/25 bg-amber-400/[0.05] p-10 max-w-2xl mx-auto text-center">
+          <TriangleAlert className="mx-auto h-8 w-8 text-amber-300/80" />
+          <h2 className="mt-4 font-display text-3xl tracking-tight">
+            TikTok blocked this content
+          </h2>
+          <p className="mt-3 text-[14px] text-white/70 leading-[1.65] max-w-md mx-auto">
+            TikTok returned access code 10242 for @{username}. Repostify also
+            retried without your connected session, but no public reposts were
+            available.
+          </p>
+        </div>
+      );
+    }
     if (data.rateLimited) {
       return (
         <div className="rounded-3xl border border-amber-400/25 bg-amber-400/[0.05] p-10 max-w-2xl mx-auto text-center">

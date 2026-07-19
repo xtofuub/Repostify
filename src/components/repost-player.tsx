@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   X,
@@ -23,6 +23,11 @@ import {
 function proxied(url: string): string {
   if (!url) return "";
   return "/api/img?u=" + encodeURIComponent(url);
+}
+
+function proxiedMedia(url: string): string {
+  if (!url) return "";
+  return "/api/video?u=" + encodeURIComponent(url);
 }
 
 export function RepostPlayer({
@@ -50,6 +55,13 @@ export function RepostPlayer({
     : false;
   const wheelLockRef = useRef(0);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const photoAudioRef = useRef<HTMLAudioElement>(null);
+  const [photoState, setPhotoState] = useState({ repostId: "", index: 0 });
+  const imageUrls = repost?.imageUrls ?? [];
+  const isPhoto = imageUrls.length > 0;
+  const photoIndex = photoState.repostId === repostId ? photoState.index : 0;
+  const photoMusicUrl =
+    isPhoto && repost?.musicUrl ? repost.musicUrl : "";
 
   // TikTok iframe player exposes a postMessage API. Spec:
   // https://developers.tiktok.com/doc/embed-player. Posting {type:"unMute"}
@@ -79,6 +91,36 @@ export function RepostPlayer({
     return () => window.removeEventListener("message", onMsg);
   }, [repostId, postToPlayer]);
 
+  // TikTok's iframe renders photo slideshows but does not reliably start the
+  // attached track. Play the exact music URL returned with the post. Opening
+  // this modal is a user gesture, so Electron permits audible autoplay.
+  useEffect(() => {
+    const audio = photoAudioRef.current;
+    if (!audio || !photoMusicUrl) return;
+    audio.muted = false;
+    audio.volume = 1;
+    void audio.play().catch(() => {});
+    return () => {
+      audio.pause();
+      audio.currentTime = 0;
+    };
+  }, [photoMusicUrl, repostId]);
+
+  useEffect(() => {
+    if (!isPhoto || imageUrls.length < 2) return;
+    const id = window.setInterval(
+      () =>
+        setPhotoState((current) => ({
+          repostId: repostId ?? "",
+          index:
+            ((current.repostId === repostId ? current.index : 0) + 1) %
+            imageUrls.length,
+        })),
+      4_500,
+    );
+    return () => window.clearInterval(id);
+  }, [imageUrls.length, isPhoto, repostId]);
+
   // Belt-and-suspenders: also try unmuting on a short delay after load, in
   // case the player never fires onPlayerReady but is still accepting messages.
   useEffect(() => {
@@ -89,31 +131,6 @@ export function RepostPlayer({
     });
     return () => ids.forEach(clearTimeout);
   }, [repostId, postToPlayer]);
-
-  // Prefetch the iframe URL of the previous + next reposts. Browser warms
-  // DNS, TLS, and (when allowed) the player HTML, so scroll-nav is faster.
-  useEffect(() => {
-    if (index === null) return;
-    const neighbors: number[] = [index - 1, index + 1].filter(
-      (i) => i >= 0 && i < reposts.length && i !== index,
-    );
-    const links: HTMLLinkElement[] = [];
-    for (const i of neighbors) {
-      const id = reposts[i]?.id;
-      if (!id) continue;
-      const href = `https://www.tiktok.com/player/v1/${id}?autoplay=1&loop=1&mute=0&music_info=0&description=0&rel=0&native_context_menu=0&closed_caption=1`;
-      const link = document.createElement("link");
-      link.rel = "prefetch";
-      link.as = "document";
-      link.href = href;
-      link.crossOrigin = "anonymous";
-      document.head.appendChild(link);
-      links.push(link);
-    }
-    return () => {
-      for (const l of links) l.remove();
-    };
-  }, [index, reposts]);
 
   const goPrev = useCallback(() => {
     if (index === null) return;
@@ -174,28 +191,6 @@ export function RepostPlayer({
             className="absolute inset-0 bg-black/80 backdrop-blur-xl"
           />
 
-          {/* Prev / Next floating buttons */}
-          {index !== null && index > 0 && (
-            <button
-              type="button"
-              aria-label="Previous repost"
-              onClick={goPrev}
-              className="absolute left-3 sm:left-8 top-1/2 -translate-y-1/2 z-20 h-12 w-12 rounded-full bg-black/60 border border-white/15 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/10 transition-colors"
-            >
-              <ChevronUp className="h-6 w-6" />
-            </button>
-          )}
-          {index !== null && index < reposts.length - 1 && (
-            <button
-              type="button"
-              aria-label="Next repost"
-              onClick={goNext}
-              className="absolute right-3 sm:right-8 top-1/2 -translate-y-1/2 z-20 h-12 w-12 rounded-full bg-black/60 border border-white/15 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/10 transition-colors"
-            >
-              <ChevronDown className="h-6 w-6" />
-            </button>
-          )}
-
           <motion.div
             key={`player-frame-${repost.id}`}
             initial={{ opacity: 0, scale: 0.96, y: 16 }}
@@ -205,7 +200,54 @@ export function RepostPlayer({
             className="relative z-10 grid grid-cols-1 md:grid-cols-[auto_22rem] gap-4 max-h-[88vh]"
           >
             <div className="relative bg-black rounded-2xl overflow-hidden flex items-center justify-center w-[min(48vh,calc(88vh*9/16))] aspect-[9/16] max-h-[88vh]">
-              {repost.id ? (
+              {isPhoto ? (
+                <button
+                  type="button"
+                  className="relative h-full w-full cursor-pointer overflow-hidden bg-black"
+                  onClick={() =>
+                    setPhotoState((current) => ({
+                      repostId: repostId ?? "",
+                      index:
+                        imageUrls.length > 1
+                          ? ((current.repostId === repostId
+                              ? current.index
+                              : 0) +
+                              1) %
+                            imageUrls.length
+                          : 0,
+                    }))
+                  }
+                  aria-label={
+                    imageUrls.length > 1 ? "Show next photo" : "Photo post"
+                  }
+                >
+                  <motion.img
+                    key={`${repost.id}-photo-${photoIndex}`}
+                    src={proxied(imageUrls[photoIndex] ?? imageUrls[0])}
+                    alt={repost.desc || `Photo post by @${repost.author.uniqueId}`}
+                    initial={{ opacity: 0.35, scale: 1.015 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.3, ease: "easeOut" }}
+                    className="h-full w-full object-contain"
+                    referrerPolicy="no-referrer"
+                  />
+                  {imageUrls.length > 1 && (
+                    <span className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-white/15 bg-black/60 px-2.5 py-1 text-[10px] tracking-[0.16em] text-white/75 backdrop-blur-md tnum">
+                      {photoIndex + 1} / {imageUrls.length}
+                    </span>
+                  )}
+                  {photoMusicUrl && (
+                    <audio
+                      ref={photoAudioRef}
+                      key={`photo-music-${repost.id}`}
+                      src={proxiedMedia(photoMusicUrl)}
+                      autoPlay
+                      loop
+                      preload="auto"
+                    />
+                  )}
+                </button>
+              ) : repost.id ? (
                 <>
                   <iframe
                     ref={iframeRef}

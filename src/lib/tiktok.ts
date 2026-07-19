@@ -22,6 +22,9 @@ export type Repost = {
   cover: string;
   playUrl: string;
   duration: number;
+  // Photo posts use TikTok's separate slideshow images + music track.
+  imageUrls?: string[];
+  musicUrl?: string;
   author: {
     uniqueId: string;
     nickname: string;
@@ -68,6 +71,9 @@ export type ScrapeResult = {
   // TikTok Web returns status 10222 for private profiles even when the saved
   // account is an approved follower. The mobile app may still show reposts.
   privateWebBlocked: boolean;
+  // TikTok status 10242 means the connected account is blocked from this
+  // content. Public profiles are retried anonymously before this is exposed.
+  blockedByAuthor: boolean;
   // True when the scraper used a saved TikTok session (storageState from
   // .tiktok-session.json). False = anonymous scrape.
   loggedIn: boolean;
@@ -80,6 +86,7 @@ export type ScrapeResult = {
     finalUrl: string;
     title: string;
     repostXhrSeen: number;
+    repostStatusCode: number;
     repostTabFound: boolean;
     rehydratedItems: number;
   };
@@ -102,6 +109,14 @@ type TikTokItem = {
     dynamicCover?: string;
     playAddr?: string;
     duration?: number;
+  };
+  imagePost?: {
+    images?: Array<{
+      imageURL?: { urlList?: string[] };
+    }>;
+  };
+  music?: {
+    playUrl?: string;
   };
   author?: {
     uniqueId?: string;
@@ -188,6 +203,11 @@ function normalizeItem(item: TikTokItem): Repost | null {
       "",
     playUrl: item.video?.playAddr ?? "",
     duration: item.video?.duration ?? 0,
+    imageUrls:
+      item.imagePost?.images
+        ?.map((image) => image.imageURL?.urlList?.[0] ?? "")
+        .filter(Boolean) ?? [],
+    musicUrl: item.music?.playUrl ?? "",
     author: {
       uniqueId: item.author.uniqueId,
       nickname: item.author.nickname ?? item.author.uniqueId,
@@ -332,6 +352,14 @@ export async function scrapeReposts(
     timeoutMs?: number;
     maxItems?: number;
     walkBudgetMs?: number;
+    /** Internal retry controls. Public callers should leave these unset. */
+    _forceAnonymous?: boolean;
+    _profileHint?: {
+      secUid: string;
+      userId: string;
+      profile: ScrapeResult["profile"];
+      privateAccount: boolean;
+    };
   } = {},
 ): Promise<ScrapeResult> {
   const username = rawUsername.replace(/^@/, "").trim();
@@ -347,7 +375,7 @@ export async function scrapeReposts(
   // Wall-clock cap on pagination. TikTok pages can take several seconds each.
   const walkBudgetMs = opts.walkBudgetMs ?? 90_000;
 
-  const storageState = loadStorageState();
+  const storageState = opts._forceAnonymous ? undefined : loadStorageState();
   const loggedIn = storageState !== undefined;
 
   const browser = await getBrowser();
@@ -363,6 +391,7 @@ export async function scrapeReposts(
   const seen = new Set<string>();
   let hasMore = false;
   let repostXhrSeen = 0;
+  let repostStatusCode = 0;
 
   let serverBlocked = false;
   // Capture first XHR URL — we use it as a template for direct cursor-based
@@ -379,7 +408,12 @@ export async function scrapeReposts(
     maxCursor?: string | number;
   }): { newCount: number } {
     const responseCode = toNum(json.statusCode ?? json.status_code);
-    if (responseCode !== 0 && responseCode !== 10222) {
+    repostStatusCode = responseCode;
+    if (
+      responseCode !== 0 &&
+      responseCode !== 10222 &&
+      responseCode !== 10242
+    ) {
       serverBlocked = true;
     }
     let added = 0;
@@ -423,7 +457,7 @@ export async function scrapeReposts(
     } catch {}
   });
 
-  let profile: ScrapeResult["profile"] = null;
+  let profile: ScrapeResult["profile"] = opts._profileHint?.profile ?? null;
   let finalUrl = "";
   let title = "";
   let captchaSuspected = false;
@@ -431,8 +465,9 @@ export async function scrapeReposts(
   let tabError = false;
   let repostTabFound = false;
   let rehydratedItems = 0;
-  let profileSecUid = "";
-  let profilePrivate = false;
+  let profileSecUid = opts._profileHint?.secUid ?? "";
+  let profileUserId = opts._profileHint?.userId ?? "";
+  let profilePrivate = opts._profileHint?.privateAccount ?? false;
   let profileStatusCode = 0;
   let privateWebBlocked = false;
 
@@ -541,6 +576,7 @@ export async function scrapeReposts(
         status_code?: number;
         userInfo?: {
           user?: {
+            id?: string;
             secUid?: string;
             uniqueId?: string;
             nickname?: string;
@@ -565,19 +601,28 @@ export async function scrapeReposts(
       const s = userDetail.userInfo?.stats;
       profileStatusCode = toNum(userDetail.statusCode ?? userDetail.status_code);
       if (u) {
-        profileSecUid = u.secUid ?? "";
-        profilePrivate = Boolean(
-          u.privateAccount ?? u.isPrivateAccount ?? u.secret,
-        );
-        profile = {
-          nickname: u.nickname ?? u.uniqueId ?? "",
-          avatar: u.avatarLarger ?? u.avatarMedium ?? u.avatarThumb ?? "",
-          verified: Boolean(u.verified),
-          bio: u.signature ?? "",
-          followers: toNum(s?.followerCount),
-          following: toNum(s?.followingCount),
-          likes: toNum(s?.heartCount ?? s?.heart),
-        };
+        profileSecUid = u.secUid || profileSecUid;
+        profileUserId = u.id || profileUserId;
+        if (
+          u.privateAccount !== undefined ||
+          u.isPrivateAccount !== undefined ||
+          u.secret !== undefined
+        ) {
+          profilePrivate = Boolean(
+            u.privateAccount ?? u.isPrivateAccount ?? u.secret,
+          );
+        }
+        if (u.nickname || u.uniqueId) {
+          profile = {
+            nickname: u.nickname ?? u.uniqueId ?? "",
+            avatar: u.avatarLarger ?? u.avatarMedium ?? u.avatarThumb ?? "",
+            verified: Boolean(u.verified),
+            bio: u.signature ?? "",
+            followers: toNum(s?.followerCount),
+            following: toNum(s?.followingCount),
+            likes: toNum(s?.heartCount ?? s?.heart),
+          };
+        }
       }
 
       const repostList = (scopes["webapp.repost-list"] ?? {}) as {
@@ -675,14 +720,15 @@ export async function scrapeReposts(
     // This recovers from DOM/feature-flag changes. Private zero-post profiles
     // currently return status 10222 here even for approved followers; expose
     // that separately instead of pretending the account has no reposts.
-    if (!clickedTab && profileSecUid) {
+    if (profileSecUid && (!clickedTab || opts._forceAnonymous)) {
       const direct = await page
-        .evaluate(async (secUid: string) => {
+        .evaluate(async ({ secUid, userId }: { secUid: string; userId: string }) => {
           const url = new URL("/api/repost/item_list/", window.location.origin);
           url.searchParams.set("aid", "1988");
           url.searchParams.set("count", "30");
           url.searchParams.set("cursor", "0");
           url.searchParams.set("secUid", secUid);
+          if (userId) url.searchParams.set("userId", userId);
           url.searchParams.set("coverFormat", "2");
           url.searchParams.set("needPinnedItemIds", "false");
           url.searchParams.set("post_item_list_request_type", "0");
@@ -693,12 +739,13 @@ export async function scrapeReposts(
           } catch {
             return null;
           }
-        }, profileSecUid)
+        }, { secUid: profileSecUid, userId: profileUserId })
         .catch(() => null);
 
       if (direct?.body && typeof direct.body === "object") {
         const body = direct.body as Parameters<typeof ingest>[0];
         const code = toNum(body.statusCode ?? body.status_code);
+        repostStatusCode = code;
         if (code === 10222 && loggedIn && profilePrivate) {
           privateWebBlocked = true;
         } else if (direct.status < 400 && code === 0) {
@@ -878,6 +925,31 @@ export async function scrapeReposts(
     await context.close().catch(() => {});
   }
 
+  // A saved TikTok identity can be blocked by a public creator even though
+  // the same repost feed remains public. TikTok reports that as 10242. This
+  // was previously mislabeled as a rate limit and made connecting an account
+  // break searches that worked anonymously. Retry public profiles without the
+  // saved session, carrying the identifiers because TikTok's anonymous page
+  // occasionally omits its hydration payload.
+  if (
+    loggedIn &&
+    repostStatusCode === 10242 &&
+    !profilePrivate &&
+    reposts.length === 0 &&
+    profileSecUid
+  ) {
+    return scrapeReposts(username, {
+      ...opts,
+      _forceAnonymous: true,
+      _profileHint: {
+        secUid: profileSecUid,
+        userId: profileUserId,
+        profile,
+        privateAccount: false,
+      },
+    });
+  }
+
   const merged = reposts;
 
   // Preserve TikTok's native order — the repost feed returns newest-reposted
@@ -889,6 +961,7 @@ export async function scrapeReposts(
   if (merged.length > maxItems) merged.length = maxItems;
 
   const outProfile = profile;
+  const blockedByAuthor = repostStatusCode === 10242;
 
   // Rate-limit signature: profile loaded, an XHR did fire, but zero items
   // came back AND nothing claimed the tab was private or captcha-locked.
@@ -897,6 +970,8 @@ export async function scrapeReposts(
     !captchaSuspected &&
     !audienceRestricted &&
     !privateWebBlocked &&
+    !blockedByAuthor &&
+    repostStatusCode === 0 &&
     profile !== null &&
     repostXhrSeen > 0 &&
     reposts.length === 0;
@@ -910,6 +985,7 @@ export async function scrapeReposts(
     audienceRestricted,
     rateLimited,
     tabError,
+    blockedByAuthor,
     privateWebBlocked:
       privateWebBlocked ||
       (loggedIn &&
@@ -930,6 +1006,7 @@ export async function scrapeReposts(
       finalUrl,
       title,
       repostXhrSeen,
+      repostStatusCode,
       repostTabFound,
       rehydratedItems,
     };
