@@ -18,7 +18,10 @@
 /out/
 
 # production
-/build
+/build/*
+!/build/icon.svg
+/release
+/desktop/stage
 
 # misc
 .DS_Store

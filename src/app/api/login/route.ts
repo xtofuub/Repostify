@@ -12,7 +12,10 @@ export const dynamic = "force-dynamic";
 // Launching a visible browser needs a desktop session on the host, so this
 // only makes sense when self-hosting / running locally. Block in production.
 function blockedInProd(): Response | null {
-  if (process.env.NODE_ENV === "production") {
+  if (
+    process.env.NODE_ENV === "production" &&
+    process.env.REPOSTIFY_DESKTOP !== "1"
+  ) {
     return Response.json(
       { error: "Login is only available when running locally." },
       { status: 403 },

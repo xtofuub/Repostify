@@ -113,6 +113,18 @@ pnpm build
 pnpm start
 ```
 
+### Windows desktop app
+
+Build the portable Windows executable:
+
+```bash
+pnpm desktop:build
+```
+
+The portable artifact is written to `release/Repostify-<version>-Windows-x64.exe`.
+It runs the Next.js server locally, opens it in a hardened Electron window, and
+stores cache/session data under the current Windows user's app-data folder.
+
 ### Debug mode
 
 ```bash

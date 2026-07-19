@@ -3,8 +3,9 @@ import type { Browser, BrowserContext, Page } from "playwright";
 import { writeFile, unlink } from "node:fs/promises";
 import { existsSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { DATA_DIR } from "@/lib/data-dir";
 
-const SESSION_PATH = join(process.cwd(), ".tiktok-session.json");
+const SESSION_PATH = join(DATA_DIR, ".tiktok-session.json");
 const TIMEOUT_MS = 10 * 60_000;
 
 export type LoginPhase =

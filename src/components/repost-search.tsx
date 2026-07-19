@@ -36,6 +36,28 @@ import { PrimaryButton } from "@/components/brand";
 import type { Repost, ScrapeResult } from "@/lib/tiktok";
 import { formatCount, isObservedRepost } from "@/lib/format";
 
+function normalizeUsername(value: string): string {
+  return value.replace(/^@/, "").trim();
+}
+
+async function fetchReposts(
+  rawUsername: string,
+  limit: number,
+  signal?: AbortSignal,
+): Promise<ScrapeResult> {
+  const username = normalizeUsername(rawUsername);
+  const url = new URL("/api/reposts", window.location.origin);
+  url.searchParams.set("username", username);
+  if (limit > 0) url.searchParams.set("limit", String(limit));
+
+  const res = await fetch(url.toString(), { cache: "no-store", signal });
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json?.error ?? "Request failed");
+  }
+  return json as ScrapeResult;
+}
+
 type State =
   | { kind: "idle" }
   | { kind: "loading"; username: string }
@@ -123,11 +145,15 @@ export function RepostSearch({
 } = {}) {
   const [input, setInput] = useState(initialUsername ?? "");
   const [limit, setLimit] = useState<number>(60);
-  const [state, setState] = useState<State>({ kind: "idle" });
-  const autoRanRef = useRef(false);
+  const [state, setState] = useState<State>(() => {
+    const username = normalizeUsername(initialUsername ?? "");
+    return username
+      ? { kind: "loading", username }
+      : { kind: "idle" };
+  });
 
   async function run(rawUsername: string, limitOverride?: number) {
-    const username = rawUsername.replace(/^@/, "").trim();
+    const username = normalizeUsername(rawUsername);
     if (!username) {
       toast.error("Enter a TikTok username");
       return;
@@ -135,20 +161,8 @@ export function RepostSearch({
     const effLimit = limitOverride ?? limit;
     setState({ kind: "loading", username });
     try {
-      const url = new URL("/api/reposts", window.location.origin);
-      url.searchParams.set("username", username);
-      if (effLimit > 0) url.searchParams.set("limit", String(effLimit));
-      const res = await fetch(url.toString(), { cache: "no-store" });
-      const json = await res.json();
-      if (!res.ok) {
-        setState({
-          kind: "error",
-          username,
-          message: json?.error ?? "Request failed",
-        });
-        return;
-      }
-      setState({ kind: "ok", data: json as ScrapeResult });
+      const data = await fetchReposts(username, effLimit);
+      setState({ kind: "ok", data });
     } catch (err) {
       setState({
         kind: "error",
@@ -164,11 +178,23 @@ export function RepostSearch({
   }
 
   useEffect(() => {
-    if (autoRanRef.current) return;
     if (!initialUsername) return;
-    autoRanRef.current = true;
-    run(initialUsername);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const username = normalizeUsername(initialUsername);
+    if (!username) return;
+
+    const controller = new AbortController();
+    void fetchReposts(username, 60, controller.signal)
+      .then((data) => setState({ kind: "ok", data }))
+      .catch((err: unknown) => {
+        if (controller.signal.aborted) return;
+        setState({
+          kind: "error",
+          username,
+          message: err instanceof Error ? err.message : "Network error",
+        });
+      });
+
+    return () => controller.abort();
   }, [initialUsername]);
 
   const aggregates = useMemo<Aggregates | null>(() => {

@@ -4,6 +4,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { randomInt } from "node:crypto";
+import { DATA_DIR } from "@/lib/data-dir";
 import {
   getCachedAllScrapeRun,
   getCachedIdSet,
@@ -269,19 +270,21 @@ async function getBrowser(): Promise<Browser> {
   }
 }
 
-// Pre-warm: fire browser launch when this module loads so first request
-// doesn't pay ~2-4s cold-start cost.
-getBrowser().catch(() => {});
+// Called by the runtime instrumentation hook. Keeping this explicit avoids
+// downloading/launching Chromium when Next.js evaluates modules during build.
+export async function prewarmBrowser(): Promise<void> {
+  await getBrowser();
+}
 
 async function dumpDebug(name: string, html: string, png: Buffer) {
   if (!DEBUG) return;
-  const dir = join(process.cwd(), ".debug");
+  const dir = join(DATA_DIR, ".debug");
   await mkdir(dir, { recursive: true }).catch(() => {});
   await writeFile(join(dir, `${name}.html`), html).catch(() => {});
   await writeFile(join(dir, `${name}.png`), png).catch(() => {});
 }
 
-const SESSION_PATH = join(process.cwd(), ".tiktok-session.json");
+const SESSION_PATH = join(DATA_DIR, ".tiktok-session.json");
 type StorageState = NonNullable<BrowserContextOptions["storageState"]>;
 
 // Re-read session file when its mtime changes so re-login via
@@ -521,7 +524,7 @@ export async function scrapeReposts(
     try {
       const json = await res.json();
       if (DEBUG && repostXhrSeen === 1) {
-        const dir = join(process.cwd(), ".debug");
+        const dir = join(DATA_DIR, ".debug");
         await mkdir(dir, { recursive: true }).catch(() => {});
         await writeFile(
           join(dir, `xhr-${username}-${Date.now()}.json`),

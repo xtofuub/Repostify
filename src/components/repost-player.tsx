@@ -40,6 +40,7 @@ export function RepostPlayer({
 }) {
   const open = index !== null && index >= 0 && index < reposts.length;
   const repost = open ? reposts[index] : null;
+  const repostId = repost?.id ?? null;
   const observed = repost
     ? isObservedRepost({
         firstSeenAt: repost.firstSeenAt,
@@ -62,7 +63,7 @@ export function RepostPlayer({
 
   // Listen for ready signal from the iframe, then unmute.
   useEffect(() => {
-    if (!repost) return;
+    if (!repostId) return;
     const onMsg = (e: MessageEvent) => {
       if (!e.origin.endsWith("tiktok.com")) return;
       const data = typeof e.data === "string"
@@ -76,18 +77,18 @@ export function RepostPlayer({
     };
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
-  }, [repost, postToPlayer]);
+  }, [repostId, postToPlayer]);
 
   // Belt-and-suspenders: also try unmuting on a short delay after load, in
   // case the player never fires onPlayerReady but is still accepting messages.
   useEffect(() => {
-    if (!repost) return;
+    if (!repostId) return;
     const ids: number[] = [];
     [400, 900, 1600, 2500].forEach((delay) => {
       ids.push(window.setTimeout(() => postToPlayer("unMute"), delay));
     });
     return () => ids.forEach(clearTimeout);
-  }, [repost?.id, postToPlayer]);
+  }, [repostId, postToPlayer]);
 
   // Prefetch the iframe URL of the previous + next reposts. Browser warms
   // DNS, TLS, and (when allowed) the player HTML, so scroll-nav is faster.
@@ -114,17 +115,17 @@ export function RepostPlayer({
     };
   }, [index, reposts]);
 
-  const goPrev = () => {
+  const goPrev = useCallback(() => {
     if (index === null) return;
     if (index > 0) onIndexChange(index - 1);
-  };
-  const goNext = () => {
+  }, [index, onIndexChange]);
+  const goNext = useCallback(() => {
     if (index === null) return;
     if (index < reposts.length - 1) onIndexChange(index + 1);
-  };
+  }, [index, onIndexChange, reposts.length]);
 
   useEffect(() => {
-    if (!repost) return;
+    if (!repostId) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
       if (e.key === "ArrowDown" || e.key === "ArrowRight" || e.key === "j") {
@@ -143,8 +144,7 @@ export function RepostPlayer({
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = prev;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repost, index]);
+  }, [goNext, goPrev, onClose, repostId]);
 
   function onWheel(e: React.WheelEvent) {
     const now = Date.now();

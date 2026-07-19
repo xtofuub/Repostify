@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Repost, ScrapeResult } from "@/lib/tiktok";
+import { DATA_DIR } from "@/lib/data-dir";
 
 // Store the full Repost JSON (including cover + playUrl). TikTok signs media
 // URLs with `x-expires` (~6-24h). Stale URLs render as broken images, which
@@ -17,7 +18,7 @@ type AllScrapeRun = {
   fetchedAt: number;
 };
 
-const CACHE_DIR = join(process.cwd(), ".cache");
+const CACHE_DIR = join(DATA_DIR, ".cache");
 const DB_PATH = join(CACHE_DIR, "repostify.db");
 
 let db: Database.Database | null = null;

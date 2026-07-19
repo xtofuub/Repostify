@@ -100,12 +100,12 @@ function Navbar() {
   return (
     <nav className="relative z-20">
       <div className="max-w-[78rem] mx-auto px-6 pt-6 flex items-center justify-between">
-        <a href="/" className="flex items-center gap-2.5 group">
+        <Link href="/" className="flex items-center gap-2.5 group">
           <LogoMark className="w-7 h-7" />
           <span className="text-[17px] tracking-tight font-semibold">
               Repostify
           </span>
-        </a>
+        </Link>
         <div className="flex items-center gap-4 sm:gap-6">
           <Link
             href="/compare"

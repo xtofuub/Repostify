@@ -1,6 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  output: "standalone",
+  outputFileTracingExcludes: {
+    "/*": [
+      "node_modules/electron/**/*",
+      "node_modules/.pnpm/electron@*/**/*",
+    ],
+  },
   reactCompiler: true,
   turbopack: {
     root: __dirname,

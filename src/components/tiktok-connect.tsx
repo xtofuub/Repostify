@@ -22,6 +22,15 @@ type LoginState = {
 
 const BUSY: Phase[] = ["opening", "awaiting"];
 
+async function fetchLoginState(): Promise<LoginState | null> {
+  try {
+    const res = await fetch("/api/login", { cache: "no-store" });
+    return (await res.json()) as LoginState;
+  } catch {
+    return null;
+  }
+}
+
 export function TikTokConnect() {
   const [state, setState] = useState<LoginState | null>(null);
   const [acting, setActing] = useState(false);
@@ -34,27 +43,23 @@ export function TikTokConnect() {
     }
   }, []);
 
-  const refresh = useCallback(async () => {
-    try {
-      const res = await fetch("/api/login", { cache: "no-store" });
-      const json = (await res.json()) as LoginState;
-      setState(json);
-      return json;
-    } catch {
-      return null;
-    }
-  }, []);
-
   useEffect(() => {
-    refresh();
-    return stopPoll;
-  }, [refresh, stopPoll]);
+    let cancelled = false;
+    void fetchLoginState().then((next) => {
+      if (!cancelled && next) setState(next);
+    });
+    return () => {
+      cancelled = true;
+      stopPoll();
+    };
+  }, [stopPoll]);
 
   // Poll while a login window is open.
   const startPolling = useCallback(() => {
     stopPoll();
     pollRef.current = setInterval(async () => {
-      const s = await refresh();
+      const s = await fetchLoginState();
+      if (s) setState(s);
       if (!s || !BUSY.includes(s.phase)) {
         stopPoll();
         if (s?.phase === "saved") toast.success("TikTok connected");
@@ -63,7 +68,7 @@ export function TikTokConnect() {
         if (s?.phase === "error") toast.error(s.message || "Login failed");
       }
     }, 1500);
-  }, [refresh, stopPoll]);
+  }, [stopPoll]);
 
   async function post(action: "start" | "cancel" | "logout") {
     setActing(true);
