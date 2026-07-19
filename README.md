@@ -83,7 +83,7 @@ No login. No undocumented API. The data is everything TikTok would show any anon
 
 | Layer            | Choice                                                                                       |
 | ---------------- | -------------------------------------------------------------------------------------------- |
-| Framework        | [Next.js](https://nextjs.org) 16.2.6 (App Router, Turbopack, React Compiler)                 |
+| Framework        | [Next.js](https://nextjs.org) 16.2.10 (App Router, Turbopack, React Compiler)                |
 | Runtime          | React 19                                                                                     |
 | Styling          | Tailwind CSS v4 with `@theme inline`                                                         |
 | Components       | shadcn/ui                                                                                    |
@@ -101,7 +101,7 @@ pnpm install
 pnpm dev
 ```
 
-First boot downloads the cloakbrowser binary (~200 MB, cached in `~/.cloakbrowser/`).
+First use downloads the cloakbrowser binary (several hundred MB, cached in `~/.cloakbrowser/`).
 
 Open [http://localhost:3000](http://localhost:3000). Paste a handle, pick a fetch limit, hit Analyze.
 
@@ -114,13 +114,34 @@ pnpm start
 
 ### Windows desktop app
 
-Build the Windows installer:
+Requirements: Windows 10/11 x64, Git, Node.js 20.9 or newer, and pnpm.
+
+Clone and install dependencies:
+
+```bash
+git clone https://github.com/xtofuub/Repostify.git
+cd Repostify
+corepack enable
+pnpm install --frozen-lockfile
+```
+
+Build the Windows installer from source:
 
 ```bash
 pnpm desktop:build
 ```
 
-The installer is written to `release/Repostify-<version>-Windows-x64-Setup.exe`.
+Build the no-install portable EXE from source:
+
+```bash
+node desktop/build.cjs --portable
+```
+
+The files are written to:
+
+- `release/Repostify-<version>-Windows-x64-Setup.exe`
+- `release/Repostify-<version>-Windows-x64-Portable.exe`
+
 It runs the Next.js server locally, opens it in a hardened Electron window, and
 stores session data and logs under the current Windows user's app-data folder.
 

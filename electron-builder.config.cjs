@@ -22,4 +22,7 @@ module.exports = {
     createStartMenuShortcut: true,
     runAfterFinish: true,
   },
+  portable: {
+    artifactName: "Repostify-${version}-Windows-${arch}-Portable.${ext}",
+  },
 };

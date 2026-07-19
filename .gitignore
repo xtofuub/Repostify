@@ -54,9 +54,6 @@ dev.err.log
 # Persistent scrape cache (SQLite)
 .cache/
 
-# claude-code per-user local settings
-.claude/settings.local.json
-
 # misc
 lol.txt
 mitm_mcp_traffic.db

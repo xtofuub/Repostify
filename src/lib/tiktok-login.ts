@@ -1,12 +1,33 @@
 import { launch } from "cloakbrowser";
 import type { Browser, BrowserContext, Page } from "playwright";
-import { writeFile, unlink } from "node:fs/promises";
-import { existsSync, statSync } from "node:fs";
+import { mkdir, writeFile, unlink } from "node:fs/promises";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { DATA_DIR } from "@/lib/data-dir";
 
 const SESSION_PATH = join(DATA_DIR, ".tiktok-session.json");
 const TIMEOUT_MS = 10 * 60_000;
+const AUTH_COOKIE_NAMES = new Set([
+  "sessionid",
+  "sessionid_ss",
+  "sid_tt",
+  "sid_guard",
+]);
+
+type SessionCookie = {
+  name?: string;
+  value?: string;
+  domain?: string;
+};
+
+function hasAuthenticatedSession(cookies: SessionCookie[]): boolean {
+  return cookies.some(
+    (cookie) =>
+      AUTH_COOKIE_NAMES.has(cookie.name ?? "") &&
+      Boolean(cookie.value) &&
+      /(^|\.)tiktok\.com$/i.test(cookie.domain ?? ""),
+  );
+}
 
 export type LoginPhase =
   | "idle"
@@ -41,6 +62,10 @@ let running = false;
 function sessionConnectedAt(): number | null {
   if (!existsSync(SESSION_PATH)) return null;
   try {
+    const saved = JSON.parse(readFileSync(SESSION_PATH, "utf8")) as {
+      cookies?: SessionCookie[];
+    };
+    if (!hasAuthenticatedSession(saved.cookies ?? [])) return null;
     return statSync(SESSION_PATH).mtimeMs;
   } catch {
     return null;
@@ -106,28 +131,31 @@ export function startLogin(): LoginState {
       const deadline = Date.now() + TIMEOUT_MS;
       while (Date.now() < deadline) {
         if (!activeContext || !activePage) break;
+        const cookies = await activeContext
+          .cookies()
+          .catch(() => []);
+        if (hasAuthenticatedSession(cookies)) {
+          // TikTok sets its auth cookies in stages. Give the redirect a moment
+          // to finish so storageState also captures the remaining cookies and
+          // local storage used for followed/private profiles.
+          await new Promise((resolve) => setTimeout(resolve, 2_000));
+          const storage = await activeContext.storageState();
+          if (!hasAuthenticatedSession(storage.cookies)) continue;
+          await mkdir(DATA_DIR, { recursive: true });
+          await writeFile(SESSION_PATH, JSON.stringify(storage, null, 2));
+          state = {
+            phase: "saved",
+            message: "Connected and verified. Future scrapes use this session.",
+            startedAt: state.startedAt,
+            connectedAt: sessionConnectedAt(),
+          };
+          break;
+        }
         if (activePage.isClosed()) {
           state = {
             ...state,
             phase: "cancelled",
-            message: "Login window closed before finishing.",
-          };
-          break;
-        }
-        const cookies = await activeContext
-          .cookies("https://www.tiktok.com")
-          .catch(() => []);
-        const sessionid = cookies.find(
-          (c) => c.name === "sessionid" && c.value,
-        );
-        if (sessionid) {
-          const storage = await activeContext.storageState();
-          await writeFile(SESSION_PATH, JSON.stringify(storage, null, 2));
-          state = {
-            phase: "saved",
-            message: "Connected. Future scrapes use this session.",
-            startedAt: state.startedAt,
-            connectedAt: sessionConnectedAt(),
+            message: "Login window closed before TikTok finished signing in.",
           };
           break;
         }

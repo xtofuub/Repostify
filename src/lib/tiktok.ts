@@ -205,13 +205,27 @@ function normalizeItem(item: TikTokItem): Repost | null {
   };
 }
 
-let cachedBrowser: Browser | null = null;
-let launching: Promise<Browser> | null = null;
+type BrowserState = {
+  cachedBrowser: Browser | null;
+  launching: Promise<Browser> | null;
+};
+
+declare global {
+  var __repostifyBrowserState: BrowserState | undefined;
+}
+
+// Instrumentation and route handlers can be emitted into separate Next.js
+// chunks. Store the launch lock on globalThis so both chunks share it and a
+// first request cannot race the startup pre-warm into two Chromium downloads.
+const browserState = (globalThis.__repostifyBrowserState ??= {
+  cachedBrowser: null,
+  launching: null,
+});
 
 async function getBrowser(): Promise<Browser> {
-  if (cachedBrowser && cachedBrowser.isConnected()) return cachedBrowser;
-  if (launching) return launching;
-  launching = (async () => {
+  if (browserState.cachedBrowser?.isConnected()) return browserState.cachedBrowser;
+  if (browserState.launching) return browserState.launching;
+  browserState.launching = (async () => {
     // cloakbrowser: source-level stealth Chromium. C++ binary patches handle
     // canvas/WebGL/audio/fonts/GPU/screen/WebRTC/CDP fingerprints — undetectable
     // because it's a real browser, not a JS-injected wrapper. humanize=false:
@@ -238,13 +252,13 @@ async function getBrowser(): Promise<Browser> {
       args: [`--fingerprint=${fpSeed}`],
       launchOptions: { args: ["--no-sandbox"] },
     })) as unknown as Browser;
-    cachedBrowser = b;
+    browserState.cachedBrowser = b;
     return b;
   })();
   try {
-    return await launching;
+    return await browserState.launching;
   } finally {
-    launching = null;
+    browserState.launching = null;
   }
 }
 
@@ -263,7 +277,25 @@ async function dumpDebug(name: string, html: string, png: Buffer) {
 }
 
 const SESSION_PATH = join(DATA_DIR, ".tiktok-session.json");
-type StorageState = NonNullable<BrowserContextOptions["storageState"]>;
+type StorageState = Exclude<
+  NonNullable<BrowserContextOptions["storageState"]>,
+  string
+>;
+const AUTH_COOKIE_NAMES = new Set([
+  "sessionid",
+  "sessionid_ss",
+  "sid_tt",
+  "sid_guard",
+]);
+
+function isAuthenticatedStorageState(state: StorageState): boolean {
+  return state.cookies.some(
+    (cookie) =>
+      AUTH_COOKIE_NAMES.has(cookie.name) &&
+      Boolean(cookie.value) &&
+      /(^|\.)tiktok\.com$/i.test(cookie.domain),
+  );
+}
 
 // Re-read session file when its mtime changes so re-login via
 // `npm run tiktok:login` takes effect without a server restart.
@@ -279,6 +311,10 @@ function loadStorageState(): StorageState | undefined {
       return cachedStorage.state;
     }
     const state = JSON.parse(readFileSync(SESSION_PATH, "utf8")) as StorageState;
+    if (!isAuthenticatedStorageState(state)) {
+      cachedStorage = null;
+      return undefined;
+    }
     cachedStorage = { state, mtimeMs };
     return state;
   } catch {

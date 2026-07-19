@@ -87,12 +87,53 @@ function pruneUnusedElectronRuntime() {
   }
 }
 
+function normalizeTracedPlaywrightImport() {
+  const serverRoot = path.join(root, ".next", "standalone", ".next", "server");
+  const aliasRoot = path.join(root, ".next", "standalone", ".next", "node_modules");
+  if (!existsSync(aliasRoot)) return;
+
+  const aliases = readdirSync(aliasRoot)
+    .filter((name) => /^playwright-core-[0-9a-f]+$/.test(name));
+  if (aliases.length === 0) return;
+
+  let replacements = 0;
+
+  function rewriteDirectory(directory) {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const target = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        rewriteDirectory(target);
+        continue;
+      }
+      if (!entry.isFile() || !/\.(?:c|m)?js$/.test(entry.name)) continue;
+
+      const source = readFileSync(target, "utf8");
+      let rewritten = source;
+      for (const alias of aliases) {
+        const occurrences = rewritten.split(alias).length - 1;
+        if (occurrences > 0) {
+          replacements += occurrences;
+          rewritten = rewritten.split(alias).join("playwright-core");
+        }
+      }
+      if (rewritten !== source) writeFileSync(target, rewritten);
+    }
+  }
+
+  rewriteDirectory(serverRoot);
+  if (replacements === 0) {
+    throw new Error(`Found ${aliases.join(", ")} but no server import to normalize.`);
+  }
+  console.log(`Normalized ${replacements} traced Playwright import(s).`);
+}
+
 rmSync(stage, { recursive: true, force: true });
 rmSync(path.join(root, ".next", "standalone"), {
   recursive: true,
   force: true,
 });
 run(node, [nextCli, "build"]);
+normalizeTracedPlaywrightImport();
 pruneUnusedElectronRuntime();
 copyRuntime();
 

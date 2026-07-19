@@ -623,9 +623,9 @@ function Results({
             @{username} restricted their audience
           </h2>
           <p className="mt-3 text-[14px] text-white/65 leading-[1.65] max-w-md mx-auto">
-            This creator turned on TikTok audience controls — their profile is
-            only visible to logged-in viewers they allow (often followers
-            only). Anonymous scraping cannot bypass this.
+            {data.loggedIn
+              ? "Your connected TikTok session was used, but TikTok still denied access. Make sure that TikTok account follows this creator, then reconnect and retry."
+              : "This profile is only visible to approved viewers. Connect the TikTok account that follows this creator, then retry."}
           </p>
         </div>
       );
@@ -669,9 +669,9 @@ function Results({
           Nothing public on @{username}
         </h2>
         <p className="mt-3 text-[14px] text-white/65 leading-[1.65] max-w-md mx-auto">
-          The reposts tab is hidden by default on most TikTok profiles. Try a
-          creator with it visibly enabled, like @khaby.lame, @mrbeast or
-          @zachking.
+          {data.loggedIn
+            ? "Your connected TikTok session was used, but TikTok returned no reposts. Confirm that this account follows the private creator, then reconnect if the follow is recent."
+            : "This search ran anonymously. Connect the TikTok account that follows this private creator, then search again."}
         </p>
       </div>
     );
