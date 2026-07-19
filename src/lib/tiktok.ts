@@ -5,17 +5,6 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { randomInt } from "node:crypto";
 import { DATA_DIR } from "@/lib/data-dir";
-import {
-  getCachedAllScrapeRun,
-  getCachedIdSet,
-  getCachedProfile,
-  getCachedReposts,
-  getSeenTimestamps,
-  getTrackingSince,
-  putCachedAllScrapeRun,
-  putProfile,
-  saveRepostsOrdered,
-} from "@/lib/cache";
 
 export type Repost = {
   id: string;
@@ -23,13 +12,7 @@ export type Repost = {
   createTime: number;
   // When the account reposted this video. 0 if TikTok did not expose it.
   repostedAt: number;
-  // Observation timing, recorded by us — not reported by TikTok. firstSeenAt
-  // is the first time this repost appeared in the account's feed during one of
-  // our scrapes; lastSeenAt is the most recent. Epoch ms. Absent on a brand-new
-  // scrape that never touched the cache. For an account tracked across multiple
-  // scrapes, firstSeenAt on a *head-of-feed* item ≈ when it was reposted
-  // (bounded by scrape cadence); deep-feed items with a late firstSeenAt are
-  // backfill discovery, not new reposts — the UI gates on feed position.
+  // Legacy optional observation fields. Live scrapes do not persist them.
   firstSeenAt?: number;
   lastSeenAt?: number;
   // Transient render-time index = this repost's position in the canonical feed
@@ -86,14 +69,9 @@ export type ScrapeResult = {
   // .tiktok-session.json). False = anonymous scrape.
   loggedIn: boolean;
   fetchedAt: number;
-  // Epoch ms of the earliest repost observation for this account = when we
-  // started watching. Null/absent until at least one repost is cached. The UI
-  // uses it to label observed repost timing and to set expectations ("tracking
-  // since X — re-scan to sharpen timing").
+  // Reserved for callers that add their own observation tracking.
   trackingSince?: number;
-  // Total reposts recorded by the last completed "All" walk for this account,
-  // if one exists. Lets a limited view (e.g. first 60) tell the user how many
-  // reposts the account actually has and offer to load them all.
+  // Total returned by a completed live "All" walk, when requested.
   knownTotal?: number;
   debug?: {
     finalUrl: string;
@@ -308,71 +286,12 @@ function loadStorageState(): StorageState | undefined {
   }
 }
 
-// Dedupe concurrent background refreshes per (auth-mode, username).
-const inFlightRefresh = new Map<string, Promise<void>>();
-function refreshKey(username: string, loggedIn: boolean): string {
-  return `${loggedIn ? "auth" : "anon"}:${username.toLowerCase()}`;
-}
-function scheduleBackgroundRefresh(
-  username: string,
-  loggedIn: boolean,
-  opts: { deep?: boolean } = {},
-): void {
-  const key = `${refreshKey(username, loggedIn)}:${opts.deep ? "deep" : "top"}`;
-  if (inFlightRefresh.has(key)) return;
-  const p = (async () => {
-    try {
-      // bypassCache=true forces real scrape. Top-only refresh walks ~3 pages
-      // to catch new reposts at the head of the feed; deep refresh re-walks
-      // the whole feed so an "all" view stays complete + URLs stay live.
-      await scrapeReposts(username, {
-        bypassCache: true,
-        maxScrolls: opts.deep ? 400 : 3,
-        maxItems: opts.deep ? undefined : 90,
-        // Deep refresh runs off the request path, so give it a much larger
-        // time budget to keep extending the cache toward completeness.
-        walkBudgetMs: opts.deep ? 240_000 : 30_000,
-      });
-    } catch {
-      // Background failure stays silent; next user request retries.
-    } finally {
-      inFlightRefresh.delete(key);
-    }
-  })();
-  inFlightRefresh.set(key, p);
-}
-
-function buildResultFromCache(
-  username: string,
-  reposts: Repost[],
-  loggedIn: boolean,
-  fetchedAt: number,
-  hasMore = false,
-): ScrapeResult {
-  const profile = getCachedProfile(username)?.profile ?? null;
-  return {
-    username,
-    profile,
-    reposts,
-    hasMore,
-    captchaSuspected: false,
-    audienceRestricted: false,
-    rateLimited: false,
-    tabError: false,
-    loggedIn,
-    fetchedAt,
-    trackingSince: getTrackingSince(username) ?? undefined,
-    knownTotal: getCachedAllScrapeRun(username)?.itemCount,
-  };
-}
-
 export async function scrapeReposts(
   rawUsername: string,
   opts: {
     maxScrolls?: number;
     timeoutMs?: number;
     maxItems?: number;
-    bypassCache?: boolean;
     walkBudgetMs?: number;
   } = {},
 ): Promise<ScrapeResult> {
@@ -386,62 +305,11 @@ export async function scrapeReposts(
   const timeoutMs = opts.timeoutMs ?? 30_000;
   const maxItems = opts.maxItems ?? Infinity;
   const finiteMaxItems = Number.isFinite(maxItems) ? maxItems : null;
-  // Wall-clock cap on the pagination walk. A page budget alone can't bound
-  // latency (TikTok pages run ~2s each), so a deep "all" walk could exceed
-  // the request timeout. When the budget is hit we stop with hasMore=true so
-  // a later deep background refresh extends the cache further.
+  // Wall-clock cap on pagination. TikTok pages can take several seconds each.
   const walkBudgetMs = opts.walkBudgetMs ?? 90_000;
 
   const storageState = loadStorageState();
   const loggedIn = storageState !== undefined;
-
-  // Stale-while-revalidate (finite request): when the DB already holds enough
-  // reposts to satisfy the limit AND the cache is recent, return instantly and
-  // refresh the head in the background. If the cache is older than the TTL we
-  // fall through to a live scrape instead — otherwise an "Analyze" would keep
-  // returning stale data (the background refresh only lands in the DB for the
-  // *next* request) and stale cover URLs (TikTok signs them with x-expires)
-  // would render as broken thumbnails. The live path is incremental: it walks
-  // the new head and stops once it hits the known cache, so it stays fast.
-  const CACHE_TTL_MS = 3 * 60_000;
-  if (!opts.bypassCache && finiteMaxItems !== null) {
-    const cached = getCachedReposts(username, finiteMaxItems);
-    if (cached.length >= finiteMaxItems) {
-      const cachedProfileRow = getCachedProfile(username);
-      const age = Date.now() - (cachedProfileRow?.fetchedAt ?? 0);
-      if (age < CACHE_TTL_MS) {
-        scheduleBackgroundRefresh(username, loggedIn);
-        return buildResultFromCache(
-          username,
-          cached,
-          loggedIn,
-          cachedProfileRow?.fetchedAt ?? Date.now(),
-        );
-      }
-      // else: stale — fall through to a live incremental scrape below.
-    }
-  }
-
-  // SWR for "all": only safe to serve from cache once a full "all" walk has
-  // been recorded (scrape_runs). Without that marker the cache may be a
-  // partial head from finite requests, so we must walk TikTok. When a run
-  // exists, serve everything instantly and deep-refresh in the background.
-  if (!opts.bypassCache && finiteMaxItems === null) {
-    const run = getCachedAllScrapeRun(username);
-    if (run) {
-      const cached = getCachedReposts(username);
-      if (cached.length > 0) {
-        scheduleBackgroundRefresh(username, loggedIn, { deep: true });
-        return buildResultFromCache(
-          username,
-          cached,
-          loggedIn,
-          run.fetchedAt,
-          run.hasMore,
-        );
-      }
-    }
-  }
 
   const browser = await getBrowser();
   const context = await browser.newContext({
@@ -452,21 +320,10 @@ export async function scrapeReposts(
   });
   const page = await context.newPage();
 
-  // Load persisted cache up-front. Incremental scrape stops walking pages
-  // once we've seen N consecutive items already in a cache large enough for
-  // the finite request. For "All" or backfills larger than cache, keep going.
-  const cachedIds = getCachedIdSet(username);
-  const hasCache = cachedIds.size > 0;
-  const canStopAtKnownCache =
-    finiteMaxItems !== null && cachedIds.size >= finiteMaxItems;
-  const INCREMENTAL_STOP_THRESHOLD = 12;
-
   const reposts: Repost[] = [];
   const seen = new Set<string>();
   let hasMore = false;
   let repostXhrSeen = 0;
-  let consecutiveKnown = 0;
-  let incrementalDone = false;
 
   let serverBlocked = false;
   // Capture first XHR URL — we use it as a template for direct cursor-based
@@ -489,13 +346,6 @@ export async function scrapeReposts(
       for (const raw of json.itemList) {
         const norm = normalizeItem(raw);
         if (!norm) continue;
-        if (canStopAtKnownCache) {
-          if (cachedIds.has(norm.id)) {
-            consecutiveKnown++;
-          } else {
-            consecutiveKnown = 0;
-          }
-        }
         if (!seen.has(norm.id)) {
           seen.add(norm.id);
           reposts.push(norm);
@@ -506,9 +356,6 @@ export async function scrapeReposts(
     if (typeof json.hasMore === "boolean") hasMore = json.hasMore;
     const c = json.maxCursor ?? json.cursor;
     if (c !== undefined && c !== null) nextCursor = c;
-    if (canStopAtKnownCache && consecutiveKnown >= INCREMENTAL_STOP_THRESHOLD) {
-      incrementalDone = true;
-    }
     return { newCount: added };
   }
 
@@ -852,7 +699,6 @@ export async function scrapeReposts(
           captchaSuspected = true;
           break;
         }
-        if (incrementalDone) break;
         if (reposts.length >= maxItems) break;
         if (!hasMore) break;
         if (!firstXhrUrl) break;
@@ -938,35 +784,7 @@ export async function scrapeReposts(
     await context.close().catch(() => {});
   }
 
-  // Merge fresh scrape with everything previously cached, fresh first. This
-  // walk started at the top of TikTok's feed, so `reposts` is newest-first;
-  // leftover cached items (older, or below this walk's window) follow in their
-  // existing order. The merged list IS the authoritative display order.
-  let merged: Repost[] = reposts;
-  if (hasCache) {
-    const cachedAll = getCachedReposts(username);
-    const ids = new Set(reposts.map((r) => r.id));
-    merged = [...reposts];
-    for (const c of cachedAll) {
-      if (!ids.has(c.id)) merged.push(c);
-    }
-  }
-
-  // Persist the merged order so the DB's position column matches the feed.
-  // Only write when the scrape wasn't blocked, else we'd flush good cache
-  // with an empty/garbage result.
-  if (!captchaSuspected && merged.length > 0) {
-    try {
-      saveRepostsOrdered(username, merged);
-    } catch {
-      // Cache write failure shouldn't break the response
-    }
-  }
-  if (!captchaSuspected && profile) {
-    try {
-      putProfile(username, profile);
-    } catch {}
-  }
+  const merged = reposts;
 
   // Preserve TikTok's native order — the repost feed returns newest-reposted
   // first. Sorting by createTime would bury fresh reposts of older videos.
@@ -976,23 +794,7 @@ export async function scrapeReposts(
   }
   if (merged.length > maxItems) merged.length = maxItems;
 
-  // Record completeness of an "all" walk so later "all" requests can serve
-  // from cache. finiteMaxItems === null means this was an unbounded request.
-  // We store hasMore too: if TikTok still had more pages when we hit the
-  // page budget, a later deep refresh keeps extending the cache.
-  if (!captchaSuspected && finiteMaxItems === null && merged.length > 0) {
-    try {
-      putCachedAllScrapeRun(username, merged.length, hasMore);
-    } catch {}
-  }
-
-  // Fall back to cached profile if this scrape didn't get one (e.g. early
-  // captcha) but cache holds a known-good copy.
-  let outProfile = profile;
-  if (!outProfile) {
-    const cp = getCachedProfile(username);
-    if (cp) outProfile = cp.profile;
-  }
+  const outProfile = profile;
 
   // Rate-limit signature: profile loaded, an XHR did fire, but zero items
   // came back AND nothing claimed the tab was private or captcha-locked.
@@ -1003,27 +805,6 @@ export async function scrapeReposts(
     profile !== null &&
     repostXhrSeen > 0 &&
     reposts.length === 0;
-
-  // Overlay observation timing onto the items we're about to return. We just
-  // persisted `merged` via saveRepostsOrdered, so every id now has a row;
-  // reading the timestamps back keeps the live response consistent with the
-  // cache-served path (firstSeenAt preserved for known items, = now for new).
-  let trackingSince: number | undefined;
-  if (merged.length > 0) {
-    try {
-      const seenTs = getSeenTimestamps(username);
-      for (const r of merged) {
-        const ts = seenTs.get(r.id);
-        if (ts) {
-          r.firstSeenAt = ts.firstSeenAt;
-          r.lastSeenAt = ts.lastSeenAt;
-        }
-      }
-      trackingSince = getTrackingSince(username) ?? undefined;
-    } catch {
-      // Timing overlay is best-effort; never fail the scrape over it.
-    }
-  }
 
   const result: ScrapeResult = {
     username,
@@ -1036,15 +817,10 @@ export async function scrapeReposts(
     tabError,
     loggedIn,
     fetchedAt: Date.now(),
-    trackingSince,
-    // Prefer this walk's own total when it was a *complete* unbounded ("All")
-    // walk; otherwise fall back to the last recorded All run so a limited view
-    // still knows the real count. A captcha-truncated walk is partial, so don't
-    // pass its length off as the total.
     knownTotal:
       finiteMaxItems === null && merged.length > 0 && !captchaSuspected
         ? merged.length
-        : getCachedAllScrapeRun(username)?.itemCount,
+        : undefined,
   };
 
   if (DEBUG) {

@@ -7,7 +7,6 @@ const {
   mkdirSync,
   readFileSync,
   readdirSync,
-  realpathSync,
   rmSync,
   unlinkSync,
   writeFileSync,
@@ -20,25 +19,6 @@ const runtime = path.join(stage, "runtime");
 const node = process.execPath;
 const nextCli = path.join(root, "node_modules", "next", "dist", "bin", "next");
 const builderCli = path.join(root, "node_modules", "electron-builder", "cli.js");
-const { version: electronVersion } = require(path.join(
-  root,
-  "node_modules",
-  "electron",
-  "package.json",
-));
-const betterSqliteRoot = realpathSync(
-  path.join(root, "node_modules", "better-sqlite3"),
-);
-const prebuildCli = require.resolve("prebuild-install/bin.js", {
-  paths: [betterSqliteRoot],
-});
-const nativeRelative = path.join(
-  "node_modules",
-  "better-sqlite3",
-  "build",
-  "Release",
-  "better_sqlite3.node",
-);
 
 function run(command, args, cwd = root) {
   const result = spawnSync(command, args, {
@@ -69,11 +49,6 @@ function copyRuntime() {
   });
   copyFileSync(path.join(__dirname, "main.cjs"), path.join(stage, "main.cjs"));
 
-  const nativeSource = path.join(root, nativeRelative);
-  const nativeTarget = path.join(runtime, nativeRelative);
-  mkdirSync(path.dirname(nativeTarget), { recursive: true });
-  copyFileSync(nativeSource, nativeTarget);
-
   const rootPackage = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
   writeFileSync(
     path.join(stage, "package.json"),
@@ -88,35 +63,6 @@ function copyRuntime() {
       2,
     )}\n`,
   );
-}
-
-function normalizeNativeModuleAlias() {
-  const serverRoot = path.join(root, ".next", "standalone", ".next", "server");
-  let replacements = 0;
-
-  function visit(directory) {
-    for (const entry of readdirSync(directory, { withFileTypes: true })) {
-      const file = path.join(directory, entry.name);
-      if (entry.isDirectory()) {
-        visit(file);
-      } else if (entry.isFile() && entry.name.endsWith(".js")) {
-        const source = readFileSync(file, "utf8");
-        const normalized = source.replace(
-          /better-sqlite3-[0-9a-f]+/g,
-          "better-sqlite3",
-        );
-        if (normalized !== source) {
-          writeFileSync(file, normalized);
-          replacements += 1;
-        }
-      }
-    }
-  }
-
-  visit(serverRoot);
-  if (replacements === 0) {
-    throw new Error("Next.js did not emit the expected better-sqlite3 alias.");
-  }
 }
 
 function pruneUnusedElectronRuntime() {
@@ -141,35 +87,14 @@ function pruneUnusedElectronRuntime() {
   }
 }
 
-const nativeSource = path.join(root, nativeRelative);
-let nativeBackup = null;
-try {
-  rmSync(stage, { recursive: true, force: true });
-  rmSync(path.join(root, ".next", "standalone"), {
-    recursive: true,
-    force: true,
-  });
-  run(node, [nextCli, "build"]);
-  normalizeNativeModuleAlias();
-  pruneUnusedElectronRuntime();
-  nativeBackup = readFileSync(nativeSource);
-  run(node, [
-    prebuildCli,
-    "--runtime",
-    "electron",
-    "--target",
-    electronVersion,
-    "--arch",
-    "x64",
-    "--force",
-  ], betterSqliteRoot);
-  copyRuntime();
-} finally {
-  if (nativeBackup) {
-    mkdirSync(path.dirname(nativeSource), { recursive: true });
-    writeFileSync(nativeSource, nativeBackup);
-  }
-}
+rmSync(stage, { recursive: true, force: true });
+rmSync(path.join(root, ".next", "standalone"), {
+  recursive: true,
+  force: true,
+});
+run(node, [nextCli, "build"]);
+pruneUnusedElectronRuntime();
+copyRuntime();
 
 const builderArgs = [
   builderCli,
@@ -183,8 +108,10 @@ const builderArgs = [
 
 if (process.argv.includes("--dir")) {
   builderArgs.push("--dir");
-} else {
+} else if (process.argv.includes("--portable")) {
   builderArgs.splice(4, 0, "portable");
+} else {
+  builderArgs.splice(4, 0, "nsis");
 }
 
 run(node, builderArgs);

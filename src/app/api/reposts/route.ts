@@ -15,7 +15,6 @@ export async function GET(req: NextRequest) {
   const limitRaw = req.nextUrl.searchParams.get("limit");
   const parsed = limitRaw ? parseInt(limitRaw, 10) : NaN;
   const limit = Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, 5000) : undefined;
-  const refresh = req.nextUrl.searchParams.get("refresh") === "1";
   const isAll = limit === undefined;
   try {
     const result = await scrapeReposts(username, {
@@ -24,7 +23,6 @@ export async function GET(req: NextRequest) {
       // limit plus a little slack for short pages.
       maxScrolls: isAll ? 400 : Math.min(120, Math.ceil(limit / 10) + 6),
       maxItems: limit,
-      bypassCache: refresh,
     });
     return Response.json(result);
   } catch (err) {

@@ -1,6 +1,6 @@
 {
   "name": "repostify",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -13,7 +13,6 @@
   },
   "dependencies": {
     "@base-ui/react": "1.4.1",
-    "better-sqlite3": "12.10.1",
     "class-variance-authority": "0.7.1",
     "cloakbrowser": "0.3.32",
     "clsx": "2.1.1",
@@ -31,7 +30,6 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/better-sqlite3": "7.6.13",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

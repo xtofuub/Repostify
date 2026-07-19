@@ -12,10 +12,14 @@ module.exports = {
   },
   files: ["**/*"],
   win: {
-    target: [{ target: "portable", arch: ["x64"] }],
-    artifactName: "Repostify-${version}-Windows-${arch}.${ext}",
+    target: [{ target: "nsis", arch: ["x64"] }],
+    artifactName: "Repostify-${version}-Windows-${arch}-Setup.${ext}",
   },
-  portable: {
-    artifactName: "Repostify-${version}-Windows-${arch}.${ext}",
+  nsis: {
+    oneClick: true,
+    perMachine: false,
+    createDesktopShortcut: true,
+    createStartMenuShortcut: true,
+    runAfterFinish: true,
   },
 };

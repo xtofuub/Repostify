@@ -23,7 +23,6 @@ export async function GET(req: NextRequest) {
     const result = await scrapeReposts(username, {
       maxScrolls: 1,
       maxItems: 1,
-      bypassCache: true,
     });
     const first = result.reposts[0] ?? null;
     return Response.json({

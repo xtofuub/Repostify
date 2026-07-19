@@ -62,7 +62,6 @@ Click any cover → full-screen overlay with TikTok's embed player + caption, st
 - **Fetch-limit selector** — Hidden in a popover behind the search bar gear: 30 / 60 / 120 / 250 / All.
 - **Bot-detection bypass** — Uses [cloakbrowser](https://github.com/CloakHQ/CloakBrowser) (stealth Chromium with source-level C++ fingerprint patches) instead of stock Playwright, so TikTok serves the full repost feed instead of cutting off at the captcha gate.
 - **Direct-cursor pagination** — After the first XHR fires, subsequent pages are fetched via the captured URL template, not by scrolling. Roughly 35% faster on big feeds.
-- **In-memory result cache** — 10 min TTL per `(handle, limit)`. Repeat lookups instant.
 - **Image proxy** — TikTok blocks hotlinks; all thumbnails route through `/api/img` with the Referer header set.
 - **SEO** — Dynamic per-handle metadata, JSON-LD (`WebApplication`, `FAQPage`, `BreadcrumbList`, `Article`), sitemap with curated popular handles, `robots.txt`.
 
@@ -115,15 +114,15 @@ pnpm start
 
 ### Windows desktop app
 
-Build the portable Windows executable:
+Build the Windows installer:
 
 ```bash
 pnpm desktop:build
 ```
 
-The portable artifact is written to `release/Repostify-<version>-Windows-x64.exe`.
+The installer is written to `release/Repostify-<version>-Windows-x64-Setup.exe`.
 It runs the Next.js server locally, opens it in a hardened Electron window, and
-stores cache/session data under the current Windows user's app-data folder.
+stores session data and logs under the current Windows user's app-data folder.
 
 ### Debug mode
 
