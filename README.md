@@ -146,8 +146,13 @@ The files are written to:
 It runs the Next.js server locally, opens it in a hardened Electron window, and
 stores session data and logs under the current Windows user's app-data folder.
 The packaged app checks the GitHub Releases page when it starts. When a newer
-version exists, choose **Update now** to download the matching installer or
-portable EXE, verify its SHA-256 digest, and open it automatically.
+version exists, the in-app update window shows the download and verification
+progress. Choose **Update now** and leave the window open. The installed build
+closes, installs silently, and reopens on the new version automatically; Windows
+can take a few minutes to unpack it. The portable build replaces the original
+portable EXE in place and then reopens it, so an old shortcut cannot start the
+previous version again. Every download is verified against GitHub's SHA-256
+digest before it is allowed to run.
 
 ### Debug mode
 

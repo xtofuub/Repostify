@@ -47,7 +47,14 @@ function copyRuntime() {
   cpSync(path.join(root, "public"), path.join(runtime, "public"), {
     recursive: true,
   });
-  copyFileSync(path.join(__dirname, "main.cjs"), path.join(stage, "main.cjs"));
+  for (const file of [
+    "main.cjs",
+    "update-preload.cjs",
+    "update-renderer.js",
+    "update.html",
+  ]) {
+    copyFileSync(path.join(__dirname, file), path.join(stage, file));
+  }
 
   const rootPackage = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
   writeFileSync(

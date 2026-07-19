@@ -1,7 +1,15 @@
-const { app, BrowserWindow, dialog, shell } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
 const { spawn, spawnSync } = require("node:child_process");
 const { createHash } = require("node:crypto");
-const { createWriteStream, mkdirSync, rmSync } = require("node:fs");
+const {
+  appendFileSync,
+  createWriteStream,
+  existsSync,
+  mkdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} = require("node:fs");
 const http = require("node:http");
 const net = require("node:net");
 const path = require("node:path");
@@ -40,6 +48,7 @@ let mainWindow = null;
 let serverProcess = null;
 let quitting = false;
 let updateCheckRunning = false;
+let updateWindow = null;
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -227,7 +236,120 @@ function isPortableBuild() {
   return Boolean(process.env.PORTABLE_EXECUTABLE_FILE);
 }
 
-async function downloadUpdateAsset(asset) {
+function appendUpdateLog(message) {
+  try {
+    appendFileSync(
+      path.join(app.getPath("userData"), "update.log"),
+      `[${new Date().toISOString()}] ${message}\n`,
+      "utf8",
+    );
+  } catch {
+    // Update logging must never stop the app from launching.
+  }
+}
+
+function createUpdateWindow({ currentVersion, latestVersion, asset }) {
+  const window = new BrowserWindow({
+    width: 500,
+    height: 452,
+    minWidth: 500,
+    minHeight: 452,
+    maxWidth: 500,
+    maxHeight: 452,
+    parent: mainWindow,
+    modal: true,
+    show: false,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    autoHideMenuBar: true,
+    backgroundColor: "#0a0a0b",
+    title: "Repostify update",
+    titleBarStyle: "hidden",
+    titleBarOverlay: {
+      color: "#0a0a0b",
+      symbolColor: "#d7d7dc",
+      height: TITLEBAR_HEIGHT,
+    },
+    webPreferences: {
+      preload: path.join(__dirname, "update-preload.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  updateWindow = window;
+
+  let closed = false;
+  let closeLocked = false;
+  let resolveAction = null;
+  let cancelDownload = null;
+
+  const finishAction = (action) => {
+    if (!resolveAction) return;
+    const resolve = resolveAction;
+    resolveAction = null;
+    resolve(action);
+  };
+
+  const onAction = (event, action) => {
+    if (event.sender !== window.webContents) return;
+    if (!new Set(["update", "later"]).has(action)) return;
+    if (action === "later") {
+      window.close();
+      return;
+    }
+    finishAction("update");
+  };
+  ipcMain.on("repostify:update-action", onAction);
+
+  window.on("close", (event) => {
+    if (closeLocked && !quitting) event.preventDefault();
+  });
+  window.on("closed", () => {
+    closed = true;
+    ipcMain.removeListener("repostify:update-action", onAction);
+    if (updateWindow === window) updateWindow = null;
+    cancelDownload?.();
+    finishAction("later");
+  });
+  window.once("ready-to-show", () => window.show());
+  void window.loadFile(path.join(__dirname, "update.html"), {
+    query: {
+      current: currentVersion,
+      latest: latestVersion,
+      bytes: String(Number(asset.size) || 0),
+      kind: isPortableBuild() ? "Portable" : "Setup",
+    },
+  });
+
+  return {
+    waitForAction() {
+      if (closed) return Promise.resolve("later");
+      return new Promise((resolve) => {
+        resolveAction = resolve;
+      });
+    },
+    sendState(state, detail = {}) {
+      if (closed || window.isDestroyed()) return;
+      window.webContents.send("repostify:update-state", { state, ...detail });
+    },
+    setCancelDownload(handler) {
+      cancelDownload = handler;
+    },
+    lockClose() {
+      closeLocked = true;
+    },
+    unlockClose() {
+      closeLocked = false;
+    },
+    close() {
+      if (!closed && !window.isDestroyed()) window.destroy();
+    },
+  };
+}
+
+async function downloadUpdateAsset(asset, { signal, onProgress } = {}) {
   const expectedDigest = String(asset.digest ?? "").toLowerCase();
   if (!/^sha256:[0-9a-f]{64}$/.test(expectedDigest)) {
     throw new Error("GitHub did not provide a valid SHA-256 digest for this update.");
@@ -247,6 +369,7 @@ async function downloadUpdateAsset(asset) {
   const response = await fetch(asset.browser_download_url, {
     headers: { "User-Agent": `Repostify/${app.getVersion()}` },
     redirect: "follow",
+    signal,
   });
   if (!response.ok || !response.body) {
     throw new Error(`Update download failed with HTTP ${response.status}.`);
@@ -260,7 +383,9 @@ async function downloadUpdateAsset(asset) {
       downloaded += chunk.length;
       hash.update(chunk);
       if (expectedSize > 0 && mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.setProgressBar(Math.min(downloaded / expectedSize, 1));
+        const progress = Math.min(downloaded / expectedSize, 1);
+        mainWindow.setProgressBar(progress);
+        onProgress?.({ downloaded, total: expectedSize, progress });
       }
       callback(null, chunk);
     },
@@ -288,25 +413,101 @@ async function downloadUpdateAsset(asset) {
   }
 }
 
-function launchAfterExit(updateFile) {
-  const escapedFile = updateFile.replace(/'/g, "''");
-  const command = [
+function spawnDetached(command, args, options = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+      ...options,
+    });
+    child.once("error", reject);
+    child.once("spawn", () => {
+      child.unref();
+      resolve();
+    });
+  });
+}
+
+function quotePowerShell(value) {
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+
+async function launchPortableReplacement(updateFile, latestVersion) {
+  const portableFile = path.resolve(String(process.env.PORTABLE_EXECUTABLE_FILE));
+  if (
+    path.extname(portableFile).toLowerCase() !== ".exe" ||
+    !existsSync(portableFile)
+  ) {
+    throw new Error("The original portable application could not be found.");
+  }
+
+  const userData = app.getPath("userData");
+  const logFile = path.join(userData, "update.log");
+  const helperFile = path.join(userData, "finish-portable-update.ps1");
+  const expectedSize = statSync(updateFile).size;
+  const installedLogMessage = quotePowerShell(
+    `Portable update installed: ${latestVersion}`,
+  );
+  const script = [
+    "$ErrorActionPreference = 'Stop'",
+    `$source = ${quotePowerShell(updateFile)}`,
+    `$destination = ${quotePowerShell(portableFile)}`,
+    `$staging = ${quotePowerShell(`${portableFile}.repostify-update`)}`,
+    `$backup = ${quotePowerShell(`${portableFile}.repostify-backup`)}`,
+    `$log = ${quotePowerShell(logFile)}`,
     `Wait-Process -Id ${process.pid} -ErrorAction SilentlyContinue`,
-    `Start-Process -FilePath '${escapedFile}'`,
-  ].join("; ");
-  const encoded = Buffer.from(command, "utf16le").toString("base64");
-  spawn(
-    "powershell.exe",
-    [
-      "-NoProfile",
-      "-NonInteractive",
-      "-WindowStyle",
-      "Hidden",
-      "-EncodedCommand",
-      encoded,
-    ],
-    { detached: true, stdio: "ignore", windowsHide: true },
-  ).unref();
+    "try {",
+    "  Remove-Item -LiteralPath $staging -Force -ErrorAction SilentlyContinue",
+    "  Remove-Item -LiteralPath $backup -Force -ErrorAction SilentlyContinue",
+    "  Copy-Item -LiteralPath $source -Destination $staging -Force",
+    `  if ((Get-Item -LiteralPath $staging).Length -ne ${expectedSize}) { throw 'Portable update copy is incomplete.' }`,
+    "  [System.IO.File]::Replace($staging, $destination, $backup)",
+    "  Remove-Item -LiteralPath $backup -Force",
+    "  Remove-Item -LiteralPath $source -Force -ErrorAction SilentlyContinue",
+    `  Add-Content -LiteralPath $log -Value ('[' + (Get-Date).ToUniversalTime().ToString('o') + '] ' + ${installedLogMessage})`,
+    "  Start-Process -FilePath $destination -ArgumentList '--updated'",
+    "} catch {",
+    "  Remove-Item -LiteralPath $staging -Force -ErrorAction SilentlyContinue",
+    "  if ((-not (Test-Path -LiteralPath $destination)) -and (Test-Path -LiteralPath $backup)) { Move-Item -LiteralPath $backup -Destination $destination -Force }",
+    "  Add-Content -LiteralPath $log -Value ('[' + (Get-Date).ToUniversalTime().ToString('o') + '] Portable update failed: ' + $_.Exception.Message)",
+    "  Add-Type -AssemblyName PresentationFramework",
+    "  [System.Windows.MessageBox]::Show('Repostify could not replace the portable EXE. The old copy is unchanged. See update.log in AppData for details.', 'Update failed', 'OK', 'Error') | Out-Null",
+    "  Start-Process -FilePath $destination",
+    "  exit 1",
+    "}",
+  ].join("\r\n");
+  writeFileSync(helperFile, `${script}\r\n`, "utf8");
+
+  await spawnDetached("powershell.exe", [
+    "-NoProfile",
+    "-NonInteractive",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-WindowStyle",
+    "Hidden",
+    "-File",
+    helperFile,
+  ]);
+}
+
+async function launchInstalledUpdate(updateFile) {
+  await spawnDetached(
+    updateFile,
+    ["/S", "--updated", "--force-run"],
+    { cwd: path.dirname(updateFile) },
+  );
+}
+
+async function launchUpdate(updateFile, latestVersion) {
+  appendUpdateLog(
+    `Starting ${isPortableBuild() ? "portable" : "setup"} update ${app.getVersion()} -> ${latestVersion}`,
+  );
+  if (isPortableBuild()) {
+    await launchPortableReplacement(updateFile, latestVersion);
+  } else {
+    await launchInstalledUpdate(updateFile);
+  }
 }
 
 async function checkForUpdates() {
@@ -320,7 +521,8 @@ async function checkForUpdates() {
     return;
   }
   updateCheckRunning = true;
-  let updateAccepted = false;
+  let updateUi = null;
+  let retryRequested = false;
   try {
     const response = await fetch(LATEST_RELEASE_API, {
       headers: {
@@ -339,41 +541,46 @@ async function checkForUpdates() {
       : null;
     if (!asset) return;
 
-    const choice = await dialog.showMessageBox(mainWindow, {
-      type: "info",
-      title: "Repostify update available",
-      message: `Repostify ${latestVersion} is ready`,
-      detail: `You have ${app.getVersion()}. Download and install the newer version now?`,
-      buttons: ["Update now", "Later"],
-      defaultId: 0,
-      cancelId: 1,
-      noLink: true,
+    updateUi = createUpdateWindow({
+      currentVersion: app.getVersion(),
+      latestVersion,
+      asset,
     });
-    if (choice.response !== 0) return;
-    updateAccepted = true;
+    if ((await updateUi.waitForAction()) !== "update") return;
 
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.setTitle("Downloading Repostify update...");
-    }
-    const updateFile = await downloadUpdateAsset(asset);
-    launchAfterExit(updateFile);
+    const abortController = new AbortController();
+    updateUi.setCancelDownload(() => abortController.abort());
+    updateUi.sendState("downloading", { progress: 0 });
+    const updateFile = await downloadUpdateAsset(asset, {
+      signal: abortController.signal,
+      onProgress: ({ downloaded, total, progress }) =>
+        updateUi?.sendState("downloading", {
+          downloaded,
+          total,
+          progress,
+        }),
+    });
+    updateUi.sendState("verifying", { progress: 1 });
+    updateUi.lockClose();
+    updateUi.sendState("installing", { latestVersion });
+    await launchUpdate(updateFile, latestVersion);
     quitting = true;
-    app.quit();
+    setTimeout(() => app.quit(), 700).unref();
   } catch (error) {
-    // Startup checks are intentionally quiet when offline or rate-limited.
-    // Once the user presses Update now, download/install failures are useful.
-    if (updateAccepted && mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.setTitle("Repostify");
-      await dialog.showMessageBox(mainWindow, {
-        type: "error",
-        title: "Update failed",
-        message: "Repostify could not install the update",
-        detail: error instanceof Error ? error.message : String(error),
-        buttons: ["OK"],
-      });
+    const message = error instanceof Error ? error.message : String(error);
+    if (updateUi && error?.name !== "AbortError") {
+      appendUpdateLog(`Update failed: ${message}`);
+      updateUi.unlockClose();
+      updateUi.sendState("error", { message });
+      if ((await updateUi.waitForAction()) === "update") {
+        updateUi.close();
+        retryRequested = true;
+      }
     }
   } finally {
+    if (quitting) return;
     updateCheckRunning = false;
+    if (retryRequested) setTimeout(() => void checkForUpdates(), 0).unref();
   }
 }
 
@@ -385,6 +592,9 @@ app.on("second-instance", () => {
 
 app.whenReady().then(async () => {
   app.setAppUserModelId("app.repostify.desktop");
+  if (process.argv.includes("--updated")) {
+    appendUpdateLog(`Update complete. Running Repostify ${app.getVersion()}.`);
+  }
   try {
     openWindow(await startServer());
     setTimeout(() => void checkForUpdates(), 5_000).unref();
