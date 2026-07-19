@@ -144,6 +144,9 @@ The files are written to:
 
 It runs the Next.js server locally, opens it in a hardened Electron window, and
 stores session data and logs under the current Windows user's app-data folder.
+The packaged app checks the GitHub Releases page when it starts. When a newer
+version exists, choose **Update now** to download the matching installer or
+portable EXE, verify its SHA-256 digest, and open it automatically.
 
 ### Debug mode
 

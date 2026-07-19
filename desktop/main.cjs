@@ -1,11 +1,16 @@
 const { app, BrowserWindow, dialog, shell } = require("electron");
 const { spawn, spawnSync } = require("node:child_process");
-const { createWriteStream, mkdirSync } = require("node:fs");
+const { createHash } = require("node:crypto");
+const { createWriteStream, mkdirSync, rmSync } = require("node:fs");
 const http = require("node:http");
 const net = require("node:net");
 const path = require("node:path");
+const { Readable, Transform } = require("node:stream");
+const { pipeline } = require("node:stream/promises");
 
 const TITLEBAR_HEIGHT = 42;
+const LATEST_RELEASE_API =
+  "https://api.github.com/repos/xtofuub/Repostify/releases/latest";
 const DESKTOP_CHROME_CSS = `
   html { background: #0a0a0b !important; }
   body { padding-top: ${TITLEBAR_HEIGHT}px !important; }
@@ -34,6 +39,7 @@ const DESKTOP_CHROME_CSS = `
 let mainWindow = null;
 let serverProcess = null;
 let quitting = false;
+let updateCheckRunning = false;
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -201,6 +207,176 @@ function stopServer() {
   serverProcess = null;
 }
 
+function isNewerVersion(candidate, current) {
+  const parse = (value) =>
+    String(value)
+      .replace(/^v/i, "")
+      .split("-")[0]
+      .split(".")
+      .map((part) => Number.parseInt(part, 10) || 0);
+  const next = parse(candidate);
+  const installed = parse(current);
+  for (let index = 0; index < Math.max(next.length, installed.length); index++) {
+    const difference = (next[index] ?? 0) - (installed[index] ?? 0);
+    if (difference !== 0) return difference > 0;
+  }
+  return false;
+}
+
+function isPortableBuild() {
+  return Boolean(process.env.PORTABLE_EXECUTABLE_FILE);
+}
+
+async function downloadUpdateAsset(asset) {
+  const expectedDigest = String(asset.digest ?? "").toLowerCase();
+  if (!/^sha256:[0-9a-f]{64}$/.test(expectedDigest)) {
+    throw new Error("GitHub did not provide a valid SHA-256 digest for this update.");
+  }
+
+  const fileName = path.basename(String(asset.name ?? ""));
+  if (!fileName.toLowerCase().endsWith(".exe")) {
+    throw new Error("The release does not contain a valid Windows application.");
+  }
+  const tempRoot = path.resolve(app.getPath("temp"));
+  const target = path.resolve(tempRoot, fileName);
+  if (path.dirname(target) !== tempRoot) {
+    throw new Error("Unsafe update file path.");
+  }
+
+  rmSync(target, { force: true });
+  const response = await fetch(asset.browser_download_url, {
+    headers: { "User-Agent": `Repostify/${app.getVersion()}` },
+    redirect: "follow",
+  });
+  if (!response.ok || !response.body) {
+    throw new Error(`Update download failed with HTTP ${response.status}.`);
+  }
+
+  const hash = createHash("sha256");
+  let downloaded = 0;
+  const expectedSize = Number(asset.size) || 0;
+  const meter = new Transform({
+    transform(chunk, _encoding, callback) {
+      downloaded += chunk.length;
+      hash.update(chunk);
+      if (expectedSize > 0 && mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.setProgressBar(Math.min(downloaded / expectedSize, 1));
+      }
+      callback(null, chunk);
+    },
+  });
+
+  try {
+    await pipeline(
+      Readable.fromWeb(response.body),
+      meter,
+      createWriteStream(target, { flags: "wx" }),
+    );
+    if (expectedSize > 0 && downloaded !== expectedSize) {
+      throw new Error("The downloaded update has the wrong size.");
+    }
+    const actualDigest = `sha256:${hash.digest("hex")}`;
+    if (actualDigest !== expectedDigest) {
+      throw new Error("The downloaded update failed its security check.");
+    }
+    return target;
+  } catch (error) {
+    rmSync(target, { force: true });
+    throw error;
+  } finally {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setProgressBar(-1);
+  }
+}
+
+function launchAfterExit(updateFile) {
+  const escapedFile = updateFile.replace(/'/g, "''");
+  const command = [
+    `Wait-Process -Id ${process.pid} -ErrorAction SilentlyContinue`,
+    `Start-Process -FilePath '${escapedFile}'`,
+  ].join("; ");
+  const encoded = Buffer.from(command, "utf16le").toString("base64");
+  spawn(
+    "powershell.exe",
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-WindowStyle",
+      "Hidden",
+      "-EncodedCommand",
+      encoded,
+    ],
+    { detached: true, stdio: "ignore", windowsHide: true },
+  ).unref();
+}
+
+async function checkForUpdates() {
+  if (
+    updateCheckRunning ||
+    !app.isPackaged ||
+    process.platform !== "win32" ||
+    !mainWindow ||
+    mainWindow.isDestroyed()
+  ) {
+    return;
+  }
+  updateCheckRunning = true;
+  let updateAccepted = false;
+  try {
+    const response = await fetch(LATEST_RELEASE_API, {
+      headers: {
+        Accept: "application/vnd.github+json",
+        "User-Agent": `Repostify/${app.getVersion()}`,
+      },
+    });
+    if (!response.ok) throw new Error(`GitHub returned HTTP ${response.status}.`);
+    const release = await response.json();
+    const latestVersion = String(release.tag_name ?? "").replace(/^v/i, "");
+    if (!latestVersion || !isNewerVersion(latestVersion, app.getVersion())) return;
+
+    const wanted = isPortableBuild() ? /Portable\.exe$/i : /Setup\.exe$/i;
+    const asset = Array.isArray(release.assets)
+      ? release.assets.find((item) => wanted.test(String(item.name ?? "")))
+      : null;
+    if (!asset) return;
+
+    const choice = await dialog.showMessageBox(mainWindow, {
+      type: "info",
+      title: "Repostify update available",
+      message: `Repostify ${latestVersion} is ready`,
+      detail: `You have ${app.getVersion()}. Download and install the newer version now?`,
+      buttons: ["Update now", "Later"],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true,
+    });
+    if (choice.response !== 0) return;
+    updateAccepted = true;
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setTitle("Downloading Repostify update...");
+    }
+    const updateFile = await downloadUpdateAsset(asset);
+    launchAfterExit(updateFile);
+    quitting = true;
+    app.quit();
+  } catch (error) {
+    // Startup checks are intentionally quiet when offline or rate-limited.
+    // Once the user presses Update now, download/install failures are useful.
+    if (updateAccepted && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setTitle("Repostify");
+      await dialog.showMessageBox(mainWindow, {
+        type: "error",
+        title: "Update failed",
+        message: "Repostify could not install the update",
+        detail: error instanceof Error ? error.message : String(error),
+        buttons: ["OK"],
+      });
+    }
+  } finally {
+    updateCheckRunning = false;
+  }
+}
+
 app.on("second-instance", () => {
   if (!mainWindow) return;
   if (mainWindow.isMinimized()) mainWindow.restore();
@@ -211,6 +387,7 @@ app.whenReady().then(async () => {
   app.setAppUserModelId("app.repostify.desktop");
   try {
     openWindow(await startServer());
+    setTimeout(() => void checkForUpdates(), 5_000).unref();
   } catch (error) {
     dialog.showErrorBox(
       "Repostify could not start",

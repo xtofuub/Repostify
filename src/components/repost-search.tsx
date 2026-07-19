@@ -615,6 +615,21 @@ function Results({
   }, [sorted, keywords, draft, exact]);
 
   if (reposts.length === 0) {
+    if (data.privateWebBlocked) {
+      return (
+        <div className="rounded-3xl border border-amber-400/25 bg-amber-400/[0.05] p-10 max-w-2xl mx-auto text-center">
+          <TriangleAlert className="mx-auto h-8 w-8 text-amber-300/80" />
+          <h2 className="mt-4 font-display text-3xl tracking-tight">
+            TikTok Web blocked this private profile
+          </h2>
+          <p className="mt-3 text-[14px] text-white/70 leading-[1.65] max-w-md mx-auto">
+            Your TikTok connection works, but TikTok returned access code 10222
+            for @{username}. TikTok currently exposes this private account&apos;s
+            reposts only inside its mobile app, even for approved friends.
+          </p>
+        </div>
+      );
+    }
     if (data.audienceRestricted) {
       return (
         <div className="rounded-3xl border border-white/10 bg-white/[0.02] p-10 max-w-2xl mx-auto text-center">

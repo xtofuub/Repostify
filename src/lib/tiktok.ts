@@ -65,6 +65,9 @@ export type ScrapeResult = {
   // Different from rateLimited: this is a TikTok-side render error, often
   // transient per profile. Tell the user to retry rather than wait it out.
   tabError: boolean;
+  // TikTok Web returns status 10222 for private profiles even when the saved
+  // account is an approved follower. The mobile app may still show reposts.
+  privateWebBlocked: boolean;
   // True when the scraper used a saved TikTok session (storageState from
   // .tiktok-session.json). False = anonymous scrape.
   loggedIn: boolean;
@@ -371,10 +374,12 @@ export async function scrapeReposts(
     itemList?: TikTokItem[];
     hasMore?: boolean;
     statusCode?: number;
+    status_code?: number;
     cursor?: string | number;
     maxCursor?: string | number;
   }): { newCount: number } {
-    if (json.statusCode && json.statusCode !== 0) {
+    const responseCode = toNum(json.statusCode ?? json.status_code);
+    if (responseCode !== 0 && responseCode !== 10222) {
       serverBlocked = true;
     }
     let added = 0;
@@ -426,6 +431,10 @@ export async function scrapeReposts(
   let tabError = false;
   let repostTabFound = false;
   let rehydratedItems = 0;
+  let profileSecUid = "";
+  let profilePrivate = false;
+  let profileStatusCode = 0;
+  let privateWebBlocked = false;
 
   try {
     await page.goto(`https://www.tiktok.com/@${username}`, {
@@ -528,8 +537,11 @@ export async function scrapeReposts(
     if (rehydrated && typeof rehydrated === "object") {
       const scopes = (rehydrated as { __DEFAULT_SCOPE__?: Record<string, unknown> }).__DEFAULT_SCOPE__ ?? {};
       const userDetail = (scopes["webapp.user-detail"] ?? {}) as {
+        statusCode?: number;
+        status_code?: number;
         userInfo?: {
           user?: {
+            secUid?: string;
             uniqueId?: string;
             nickname?: string;
             avatarLarger?: string;
@@ -537,6 +549,9 @@ export async function scrapeReposts(
             avatarThumb?: string;
             verified?: boolean;
             signature?: string;
+            privateAccount?: boolean;
+            isPrivateAccount?: boolean;
+            secret?: boolean;
           };
           stats?: {
             followerCount?: number;
@@ -548,7 +563,12 @@ export async function scrapeReposts(
       };
       const u = userDetail.userInfo?.user;
       const s = userDetail.userInfo?.stats;
+      profileStatusCode = toNum(userDetail.statusCode ?? userDetail.status_code);
       if (u) {
+        profileSecUid = u.secUid ?? "";
+        profilePrivate = Boolean(
+          u.privateAccount ?? u.isPrivateAccount ?? u.secret,
+        );
         profile = {
           nickname: u.nickname ?? u.uniqueId ?? "",
           avatar: u.avatarLarger ?? u.avatarMedium ?? u.avatarThumb ?? "",
@@ -646,6 +666,44 @@ export async function scrapeReposts(
           await loc.click({ timeout: 5_000 }).catch(() => {});
           clickedTab = true;
           break;
+        }
+      }
+    }
+
+    // TikTok sometimes omits the repost tab entirely. Ask the endpoint
+    // directly from inside the authenticated page before declaring it empty.
+    // This recovers from DOM/feature-flag changes. Private zero-post profiles
+    // currently return status 10222 here even for approved followers; expose
+    // that separately instead of pretending the account has no reposts.
+    if (!clickedTab && profileSecUid) {
+      const direct = await page
+        .evaluate(async (secUid: string) => {
+          const url = new URL("/api/repost/item_list/", window.location.origin);
+          url.searchParams.set("aid", "1988");
+          url.searchParams.set("count", "30");
+          url.searchParams.set("cursor", "0");
+          url.searchParams.set("secUid", secUid);
+          url.searchParams.set("coverFormat", "2");
+          url.searchParams.set("needPinnedItemIds", "false");
+          url.searchParams.set("post_item_list_request_type", "0");
+          try {
+            const response = await fetch(url, { credentials: "include" });
+            const body = await response.json();
+            return { status: response.status, body };
+          } catch {
+            return null;
+          }
+        }, profileSecUid)
+        .catch(() => null);
+
+      if (direct?.body && typeof direct.body === "object") {
+        const body = direct.body as Parameters<typeof ingest>[0];
+        const code = toNum(body.statusCode ?? body.status_code);
+        if (code === 10222 && loggedIn && profilePrivate) {
+          privateWebBlocked = true;
+        } else if (direct.status < 400 && code === 0) {
+          ingest(body);
+          clickedTab = true;
         }
       }
     }
@@ -838,6 +896,7 @@ export async function scrapeReposts(
   const rateLimited =
     !captchaSuspected &&
     !audienceRestricted &&
+    !privateWebBlocked &&
     profile !== null &&
     repostXhrSeen > 0 &&
     reposts.length === 0;
@@ -851,6 +910,13 @@ export async function scrapeReposts(
     audienceRestricted,
     rateLimited,
     tabError,
+    privateWebBlocked:
+      privateWebBlocked ||
+      (loggedIn &&
+        profilePrivate &&
+        profileStatusCode === 10222 &&
+        !repostTabFound &&
+        reposts.length === 0),
     loggedIn,
     fetchedAt: Date.now(),
     knownTotal:
