@@ -31,7 +31,7 @@ export async function generateMetadata({
     return { title: "Invalid handle", robots: { index: false } };
   }
   const title = `See @${username}'s TikTok reposts`;
-  const description = `View every public repost on @${username}'s TikTok profile. Free TikTok repost viewer — no login, no signup. Plays each video inline with stats per repost and top amplified creators.`;
+  const description = `Search the visible repost trail on @${username}'s TikTok profile. Filter captions by keyword, play videos, and explore repost stats without signup.`;
   return {
     title,
     description,

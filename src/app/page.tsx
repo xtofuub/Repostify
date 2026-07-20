@@ -1,10 +1,16 @@
 import Link from "next/link";
-import { ArrowUpRight, Settings, Users } from "lucide-react";
+import {
+  ArrowUpRight,
+  BookOpen,
+  Info,
+  Search,
+  Settings,
+  Users,
+} from "lucide-react";
 import {
   BackgroundVideo,
   GuideLines,
   LogoMark,
-  PrimaryButton,
   SectionLabel,
 } from "@/components/brand";
 import { RepostSearch } from "@/components/repost-search";
@@ -13,24 +19,32 @@ import { SITE_NAME, SITE_URL } from "@/lib/seo";
 
 const FAQ_ITEMS = [
   {
-    q: "How many reposts does it pull?",
-    a: "Every public repost on the profile. TikTok paginates the reposts feed roughly 30 items at a time, and we walk every page until the server signals no more. Big feeds (hundreds of items) finish in one to three minutes; small ones in under a minute.",
+    q: "Can I search someone's reposts by keyword?",
+    a: "Yes. After a scan, search captions and hashtags for any word or phrase. You can keep multiple keyword filters active and switch exact matching on when needed.",
   },
   {
-    q: "Can I play the videos here?",
-    a: "Yes. Click any cover in the grid. The video opens in a player overlay. Press ESC or click outside to close.",
+    q: "How many reposts can I load?",
+    a: "Choose 30, 60, 120, 250, or All. Repostify follows TikTok's feed cursor until it reaches your limit or TikTok reports that no more items are available.",
   },
   {
-    q: "Do I need a TikTok account?",
-    a: "Not for public profiles. The desktop app can optionally connect your TikTok session for profiles that require login. Session data stays on your device.",
+    q: "Can it scan private or restricted profiles?",
+    a: "Sometimes. Connect TikTok in the desktop app and Repostify will use that session. It still depends on what TikTok Web allows the signed-in account to view.",
   },
   {
-    q: "The result was empty. What happened?",
-    a: "Most profiles keep their reposts tab private. That is on the creator, not us. Try a public account like @khaby.lame or @mrbeast.",
+    q: "Why did a scan return nothing?",
+    a: "The reposts tab may be hidden, the profile may use audience controls, or TikTok may be rate-limiting the browser. Wait briefly, reconnect if needed, then scan again.",
+  },
+  {
+    q: "Can I play videos and photo posts here?",
+    a: "Yes. Repostify opens TikTok's native player first and provides a direct fallback for unavailable videos. Photo posts use an in-app slideshow with music when TikTok provides it.",
+  },
+  {
+    q: "What does Repostify save?",
+    a: "Successful scans use a 15-minute local JSON cache. A connected TikTok session also stays on your device. Both can be managed from Settings.",
   },
   {
     q: "Is this affiliated with TikTok?",
-    a: "No. Repostify is an independent tool that reads the same public page you can. Not affiliated with or endorsed by TikTok.",
+    a: "No. Repostify is an independent, read-only tool. It is not affiliated with or endorsed by TikTok or ByteDance.",
   },
 ];
 
@@ -45,10 +59,12 @@ function HomeJsonLd() {
       operatingSystem: "Any (web browser)",
       browserRequirements: "Requires JavaScript and a modern web browser",
       description:
-        "Open any public TikTok profile, walk the reposts tab, and view every repost as a playable grid with stats, top creators, and a recency-sorted reel.",
+        "Turn a visible TikTok repost feed into a searchable trail with keyword filters, playback, comparisons, stats, and creator insights.",
       offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
       featureList: [
-        "View every repost on a public TikTok profile",
+        "View the reposts TikTok Web exposes for a profile",
+        "Search repost captions and hashtags by keyword",
+        "Compare two accounts and find shared reposts",
         "Play each repost video in-browser",
         "See aggregate plays, likes, comments, and shares",
         "Rank the most-amplified creators",
@@ -78,8 +94,8 @@ const BG_VIDEO =
 
 export default function Home() {
   return (
-    <div id="top" className="relative min-h-screen overflow-x-hidden flex flex-col">
-      <BackgroundVideo src={BG_VIDEO} />
+    <div id="top" className="relative flex min-h-[100dvh] flex-col overflow-x-hidden">
+      <BackgroundVideo src={BG_VIDEO} intensity="subtle" />
       <GuideLines />
 
       <HomeJsonLd />
@@ -139,37 +155,36 @@ function Navbar() {
 function Hero() {
   return (
     <header className="relative pt-12 pb-16 md:pt-16 md:pb-20">
-      <div className="aurora absolute inset-x-0 top-0 h-[640px] -z-[1]" />
       <div className="max-w-[72rem] mx-auto px-6">
         <div className="text-center max-w-[44rem] mx-auto">
-          <SectionLabel>TikTok repost viewer</SectionLabel>
+          <SectionLabel>Follow the repost trail</SectionLabel>
           <h1 className="mt-6 font-display text-[clamp(2.4rem,6vw,5rem)] leading-[0.95] tracking-[-0.02em]">
-            Every repost on a{" "}
-            <span className="italic text-[#25f4ee]">profile</span>,
-            <br />
-            playable here.
+            Their{" "}
+            <span className="inline-block pb-1 italic leading-[1.1] text-[#25f4ee]">
+              reposts
+            </span>{" "}
+            tell on them.
           </h1>
           <p className="mt-5 max-w-[44ch] mx-auto text-[14.5px] leading-[1.65] text-white/65">
-            Paste a TikTok handle. We open the public profile, click the
-            reposts tab, and load every repost into a clean grid you can play
-            in-browser.
+            Search a crush, an ex, or any creator. Filter visible reposts by
+            keyword and see what keeps showing up.
           </p>
         </div>
-        <div className="mt-9">
+        <div id="search" className="mt-9 scroll-mt-8">
           <RepostSearch />
         </div>
         <div className="mt-6 flex flex-col items-center gap-3">
           <Link
             href="/compare"
-            className="group inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.04] px-5 py-2.5 text-[13px] text-white/85 hover:text-white hover:border-white/30 hover:bg-white/[0.08] transition-colors"
+            className="group inline-flex h-10 items-center gap-2 rounded-lg border border-white/12 bg-white/[0.035] px-4 text-[13px] text-white/75 transition-colors hover:border-white/25 hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
           >
             <Users className="h-4 w-4 text-[#25f4ee]" />
             Or compare two accounts
             <ArrowUpRight className="h-3.5 w-3.5 opacity-60 group-hover:opacity-100 transition-opacity" />
           </Link>
           <p className="max-w-[44rem] mx-auto text-center text-[12px] leading-[1.6] text-white/45">
-            Public profiles work without login. Desktop users can connect
-            TikTok for profiles their account is allowed to view.
+            Public profiles work without login. Connect TikTok for profiles
+            your account is allowed to view.
           </p>
         </div>
       </div>
@@ -186,8 +201,8 @@ function FAQ() {
           <div className="col-span-12 md:col-span-4">
             <SectionLabel>FAQ</SectionLabel>
             <h2 className="mt-6 font-display text-[clamp(2rem,4vw,3.25rem)] leading-[0.95] tracking-[-0.015em]">
-              Things people ask{" "}
-              <span className="italic text-white/55">before paste.</span>
+              Questions before{" "}
+              <span className="italic text-white/55">you scan.</span>
             </h2>
           </div>
           <div className="col-span-12 md:col-span-8 space-y-3">
@@ -216,22 +231,42 @@ function FAQ() {
 
 function FinalCTA() {
   return (
-    <section className="relative py-20 md:py-28">
+    <section className="relative py-16 md:py-20">
       <div className="max-w-[72rem] mx-auto px-6">
-        <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.02] px-8 py-16 md:px-16 md:py-20 text-center">
-          <div className="aurora absolute inset-0 -z-[1]" />
-          <SectionLabel>Try another handle</SectionLabel>
-          <h2 className="mt-5 font-display text-[clamp(2.2rem,5.5vw,4.5rem)] leading-[0.95] tracking-[-0.025em]">
-            One more profile.{" "}
-            <span className="italic text-[#25f4ee]">One more reel.</span>
+        <div className="rounded-2xl border border-white/10 bg-[#0d0d0f]/90 px-6 py-10 text-center md:px-10 md:py-12">
+          <h2 className="font-display text-[clamp(2rem,4vw,3.4rem)] leading-[1] tracking-[-0.02em]">
+            Curious what they keep reposting?
           </h2>
-          <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
-            <a href="#top">
-              <PrimaryButton size="lg">
-                Back to search
-                <ArrowUpRight className="ml-1 h-4 w-4" />
-              </PrimaryButton>
-            </a>
+          <p className="mx-auto mt-3 max-w-[38ch] text-[14px] leading-[1.6] text-white/55">
+            Enter a handle, scan the visible feed, then search captions and
+            hashtags for the clues you care about.
+          </p>
+
+          <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <Link
+              href="#search"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-white/80 bg-white px-5 text-[13px] font-semibold text-[#0a0a0b] transition-colors hover:bg-white/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b]"
+            >
+              <Search className="h-4 w-4" />
+              Follow the trail
+            </Link>
+
+            <div className="flex items-center gap-2">
+              <Link
+                href="/guide"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-white/10 px-3 text-[12px] font-medium text-white/60 transition-colors hover:border-white/20 hover:bg-white/[0.04] hover:text-white"
+              >
+                <BookOpen className="h-3.5 w-3.5" />
+                Guide
+              </Link>
+              <Link
+                href="/about"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-white/10 px-3 text-[12px] font-medium text-white/60 transition-colors hover:border-white/20 hover:bg-white/[0.04] hover:text-white"
+              >
+                <Info className="h-3.5 w-3.5" />
+                About
+              </Link>
+            </div>
           </div>
         </div>
       </div>
@@ -251,8 +286,8 @@ function Footer() {
             </span>
           </div>
           <p className="mt-3 text-[13px] leading-[1.65] text-white/55 max-w-[42ch]">
-            A read-only tool for viewing TikTok reposts. Successful scans use a
-            short local cache, removable anytime in Settings.
+            Search and compare visible TikTok repost trails. Repostify is
+            read-only, and its short local cache can be cleared anytime.
           </p>
         </div>
         <nav className="col-span-12 sm:col-span-6 sm:text-right">
@@ -296,9 +331,7 @@ function Footer() {
       <div className="border-t border-white/8 py-5">
         <div className="max-w-[78rem] mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-white/40">
           <p>© {new Date().getFullYear()} Repostify</p>
-          <p className="tracking-[0.18em] uppercase">
-            Public profiles · local cache
-          </p>
+          <p>Visible feeds only. Read-only by design.</p>
         </div>
       </div>
     </footer>

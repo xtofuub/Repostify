@@ -85,7 +85,7 @@ export function TikTokConnect() {
       const json = (await res.json()) as LoginState;
       setState(json);
       if (action === "start") {
-        toast("Browser window opening — log in there");
+        toast("Browser window opening. Log in there.");
         startPolling();
       } else {
         stopPoll();

@@ -48,10 +48,10 @@ export function PrimaryButton({
     <button
       {...rest}
       className={cn(
-        "relative inline-flex items-center justify-center rounded-full font-medium",
+        "relative inline-flex items-center justify-center rounded-lg font-medium",
         "bg-white text-[#0a0a0b] transition-all",
         "hover:bg-white/90 active:scale-[0.98]",
-        "shadow-[0_8px_24px_-8px_rgba(255,255,255,0.4)]",
+        "border border-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b]",
         "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white",
         sizes[size],
         className,
@@ -77,7 +77,7 @@ export function GhostButton({
     <button
       {...rest}
       className={cn(
-        "relative inline-flex items-center justify-center rounded-full font-medium",
+        "relative inline-flex items-center justify-center rounded-lg font-medium",
         "border border-white/15 bg-white/[0.02] text-white transition-all",
         "hover:bg-white/[0.06] hover:border-white/25 active:scale-[0.98]",
         sizes[size],
@@ -118,7 +118,15 @@ export function GuideLines() {
   );
 }
 
-export function BackgroundVideo({ src }: { src: string }) {
+export function BackgroundVideo({
+  src,
+  intensity = "default",
+}: {
+  src: string;
+  intensity?: "default" | "subtle";
+}) {
+  const subtle = intensity === "subtle";
+
   return (
     <div className="fixed inset-0 z-0 pointer-events-none">
       <video
@@ -126,10 +134,20 @@ export function BackgroundVideo({ src }: { src: string }) {
         loop
         muted
         playsInline
-        className="w-full h-full object-cover pointer-events-none opacity-[0.55]"
+        className={cn(
+          "w-full h-full object-cover pointer-events-none",
+          subtle ? "opacity-[0.22]" : "opacity-[0.55]",
+        )}
         src={src}
       />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(10,10,11,0.2)_0%,rgba(10,10,11,0.7)_45%,#0a0a0b_85%)]" />
+      <div
+        className={cn(
+          "absolute inset-0",
+          subtle
+            ? "bg-[radial-gradient(ellipse_at_top,rgba(10,10,11,0.58)_0%,rgba(10,10,11,0.88)_48%,#0a0a0b_82%)]"
+            : "bg-[radial-gradient(ellipse_at_top,rgba(10,10,11,0.2)_0%,rgba(10,10,11,0.7)_45%,#0a0a0b_85%)]",
+        )}
+      />
     </div>
   );
 }

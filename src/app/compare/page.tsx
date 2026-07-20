@@ -1,17 +1,11 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { Settings } from "lucide-react";
+import { ArrowLeft, Settings } from "lucide-react";
 import {
-  BackgroundVideo,
-  GuideLines,
   LogoMark,
-  SectionLabel,
 } from "@/components/brand";
 import { CompareSearch } from "@/components/compare-search";
 import { canonical, SITE_NAME } from "@/lib/seo";
-
-const BG =
-  "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260508_064122_c4750c0e-7476-4b44-94a2-a85a65c63bf2.mp4";
 
 const HANDLE_RE = /^[A-Za-z0-9._]{1,30}$/;
 
@@ -35,8 +29,8 @@ export async function generateMetadata({
       : "Compare two TikTok accounts";
   const description =
     a && b
-      ? `See which TikTok videos both @${a} and @${b} reposted. Side-by-side overlap, shared repost grid, and percent agreement.`
-      : "Paste two TikTok handles to see which videos both accounts reposted. Reveals shared taste, follow circles, and amplification overlap.";
+      ? `See which visible TikTok reposts appeared in both @${a} and @${b}'s scans.`
+      : "Paste two TikTok handles to compare their visible repost feeds and find shared results.";
   return {
     title,
     description,
@@ -67,57 +61,52 @@ export default async function ComparePage({
   const b = normalize(rawB);
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden flex flex-col">
-      <BackgroundVideo src={BG} />
-      <GuideLines />
-
-      <div className="relative z-10 flex-1 flex flex-col">
-        <nav className="max-w-[78rem] mx-auto w-full px-6 pt-6 flex items-center justify-between">
+    <div className="flex min-h-[100dvh] flex-col bg-[#08080a] text-white">
+      <div className="border-b border-white/[0.07] bg-[#08080a]/95">
+        <nav className="mx-auto flex h-16 w-full max-w-[72rem] items-center justify-between px-4 sm:px-6">
           <Link href="/" className="flex items-center gap-2.5">
-            <LogoMark className="w-7 h-7" />
-            <span className="text-[17px] tracking-tight font-semibold">
+            <LogoMark className="h-7 w-7" />
+            <span className="text-[16px] font-semibold tracking-tight">
               Repostify
             </span>
           </Link>
-          <div className="flex items-center gap-5">
+          <div className="flex items-center gap-2">
             <Link
               href="/"
-              className="text-[12px] uppercase tracking-[0.22em] text-white/55 hover:text-white transition-colors"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.025] px-3 text-[12px] font-medium text-white/60 transition-colors hover:border-white/20 hover:bg-white/[0.055] hover:text-white"
             >
+              <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.8} />
               Single search
             </Link>
             <Link
               href="/settings"
               aria-label="Settings"
-              className="text-white/45 transition-colors hover:text-white"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/[0.025] text-white/45 transition-colors hover:border-white/20 hover:bg-white/[0.055] hover:text-white"
             >
-              <Settings className="h-4 w-4" />
+              <Settings className="h-4 w-4" strokeWidth={1.8} />
             </Link>
           </div>
         </nav>
+      </div>
 
-        <main className="flex-1">
-          <header className="relative pt-10 pb-10 md:pt-14 md:pb-12">
-            <div className="aurora absolute inset-x-0 top-0 h-[520px] -z-[1]" />
-            <div className="max-w-[72rem] mx-auto px-6 text-center">
-              <SectionLabel>Compare two TikTok accounts</SectionLabel>
-              <h1 className="mt-5 font-display text-[clamp(2.2rem,5.5vw,4.5rem)] leading-[0.95] tracking-[-0.02em]">
-                Two handles.{" "}
-                <span className="italic text-[#25f4ee]">Shared reposts.</span>
-              </h1>
-              <p className="mt-5 max-w-[48ch] mx-auto text-[14px] leading-[1.65] text-white/60">
-                Paste two TikTok handles. We scrape both repost feeds in
-                parallel and surface every video both accounts reposted.
-              </p>
-            </div>
-            <div className="max-w-[60rem] mx-auto px-6 mt-10">
-              <CompareSearch initialA={a} initialB={b} />
-            </div>
-          </header>
-        </main>
+      <main className="mx-auto w-full max-w-[68rem] flex-1 px-4 pb-16 pt-10 sm:px-6 sm:pt-14">
+        <header className="max-w-[42rem]">
+          <p className="text-[13px] font-medium text-[#25f4ee]">Compare repost trails</p>
+          <h1 className="mt-3 font-display text-[clamp(2.35rem,5vw,4rem)] leading-[0.98] tracking-[-0.02em] text-white">
+            See where their repost trails cross.
+          </h1>
+          <p className="mt-4 max-w-[54ch] text-[15px] leading-7 text-white/55">
+            Compare two visible feeds and spot the exact videos both accounts reposted.
+          </p>
+        </header>
 
-        <footer className="border-t border-white/8 py-6 mt-10">
-          <div className="max-w-[78rem] mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-white/40">
+        <section className="mt-8">
+          <CompareSearch initialA={a} initialB={b} />
+        </section>
+      </main>
+
+      <footer className="border-t border-white/[0.07] py-6">
+          <div className="mx-auto flex w-full max-w-[72rem] flex-col items-center justify-between gap-3 px-4 text-[11px] text-white/40 sm:flex-row sm:px-6">
             <p>© {new Date().getFullYear()} Repostify</p>
             <div className="flex gap-5">
               <Link href="/" className="hover:text-white transition-colors">
@@ -137,8 +126,7 @@ export default async function ComparePage({
               </Link>
             </div>
           </div>
-        </footer>
-      </div>
+      </footer>
     </div>
   );
 }

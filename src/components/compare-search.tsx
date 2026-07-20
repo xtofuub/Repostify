@@ -1,8 +1,15 @@
 "use client";
 
 import { useMemo, useState, type FormEvent } from "react";
-import { motion, AnimatePresence } from "motion/react";
-import { AlertCircle, ArrowRight, Loader2, Search, Users } from "lucide-react";
+import { motion, AnimatePresence, useReducedMotion } from "motion/react";
+import {
+  AlertCircle,
+  ArrowRight,
+  Check,
+  Loader2,
+  Search,
+  Users,
+} from "lucide-react";
 import { toast } from "sonner";
 import { RepostCard } from "@/components/repost-card";
 import { RepostPlayer } from "@/components/repost-player";
@@ -46,6 +53,7 @@ export function CompareSearch({
   const [bInput, setBInput] = useState(initialB ?? "");
   const [state, setState] = useState<State>({ kind: "idle" });
   const [playerIndex, setPlayerIndex] = useState<number | null>(null);
+  const reduceMotion = useReducedMotion();
 
   async function run(rawA: string, rawB: string) {
     const a = rawA.replace(/^@/, "").trim();
@@ -89,51 +97,75 @@ export function CompareSearch({
   }, [state]);
 
   return (
-    <div className="space-y-12">
-      <form onSubmit={onSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <HandleInput
-            value={aInput}
-            onChange={setAInput}
-            placeholder="first handle"
-            label="Account A"
-          />
-          <HandleInput
-            value={bInput}
-            onChange={setBInput}
-            placeholder="second handle"
-            label="Account B"
-          />
+    <div className="space-y-10">
+      <form
+        onSubmit={onSubmit}
+        className="overflow-hidden rounded-2xl border border-white/[0.09] bg-[#0d0d10] shadow-[0_24px_80px_rgba(0,0,0,0.24)]"
+      >
+        <div className="border-b border-white/[0.07] px-4 py-4 sm:px-5">
+          <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-white">
+            Choose two accounts
+          </h2>
+          <p className="mt-1 text-[13px] leading-5 text-white/45">
+            Enter the TikTok handles you want to compare.
+          </p>
         </div>
-        <div className="flex justify-center">
-          <PrimaryButton
-            type="submit"
-            size="lg"
-            disabled={state.kind === "loading"}
-          >
-            {state.kind === "loading" ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                Scraping both
-              </>
-            ) : (
-              <>
-                <Search className="h-4 w-4 mr-2" />
-                Compare
-              </>
-            )}
-          </PrimaryButton>
+        <div className="p-4 sm:p-5">
+          <div className="grid items-end gap-3 md:grid-cols-[minmax(0,1fr)_2rem_minmax(0,1fr)]">
+            <HandleInput
+              value={aInput}
+              onChange={setAInput}
+              placeholder="first handle"
+              label="First account"
+            />
+            <div className="hidden h-12 items-center justify-center pb-px text-[11px] font-semibold uppercase tracking-[0.12em] text-white/30 md:flex">
+              vs
+            </div>
+            <HandleInput
+              value={bInput}
+              onChange={setBInput}
+              placeholder="second handle"
+              label="Second account"
+            />
+          </div>
+          <div className="mt-4 flex flex-col gap-3 border-t border-white/[0.07] pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-[12px] leading-5 text-white/40">
+              Only reposts visible to your connected TikTok session can be matched.
+            </p>
+            <PrimaryButton
+              type="submit"
+              size="lg"
+              className="w-full shrink-0 sm:w-auto"
+              disabled={
+                state.kind === "loading" || !aInput.trim() || !bInput.trim()
+              }
+            >
+              {state.kind === "loading" ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Scanning both
+                </>
+              ) : (
+                <>
+                  <Search className="mr-2 h-4 w-4" />
+                  Compare reposts
+                </>
+              )}
+            </PrimaryButton>
+          </div>
         </div>
       </form>
+
+      {state.kind === "idle" && <CompareNotes />}
 
       <AnimatePresence mode="wait">
         {state.kind === "loading" && (
           <motion.div
             key="loading"
-            initial={{ opacity: 0, y: 16 }}
+            initial={reduceMotion ? false : { opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -16 }}
-            transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+            exit={reduceMotion ? undefined : { opacity: 0, y: -12 }}
+            transition={{ duration: reduceMotion ? 0 : 0.35, ease: [0.16, 1, 0.3, 1] }}
           >
             <LoadingState a={state.a} b={state.b} />
           </motion.div>
@@ -142,9 +174,9 @@ export function CompareSearch({
         {state.kind === "done" && intersection && (
           <motion.div
             key={`done-${state.a}-${state.b}`}
-            initial={{ opacity: 0, y: 16 }}
+            initial={reduceMotion ? false : { opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: reduceMotion ? 0 : 0.4, ease: [0.16, 1, 0.3, 1] }}
             className="space-y-10"
           >
             <CompareStats
@@ -157,9 +189,19 @@ export function CompareSearch({
 
             {intersection.shared.length > 0 ? (
               <section className="space-y-5">
-                <h2 className="font-display text-[clamp(1.6rem,3vw,2.4rem)] tracking-[-0.015em]">
-                  Reposted by both
-                </h2>
+                <div className="flex items-end justify-between gap-4">
+                  <div>
+                    <h2 className="text-[22px] font-semibold tracking-[-0.025em] text-white">
+                      Shared reposts
+                    </h2>
+                    <p className="mt-1 text-[13px] text-white/45">
+                      Videos found in both visible feeds.
+                    </p>
+                  </div>
+                  <p className="text-[12px] font-medium text-white/45">
+                    {formatCount(intersection.shared.length)} found
+                  </p>
+                </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                   {intersection.shared.map((r, i) => (
                     <RepostCard
@@ -179,8 +221,9 @@ export function CompareSearch({
         {state.kind === "done" && (state.sideA.kind === "error" || state.sideB.kind === "error") && (
           <motion.div
             key="err"
-            initial={{ opacity: 0, y: 16 }}
+            initial={reduceMotion ? false : { opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: reduceMotion ? 0 : 0.3 }}
           >
             <SideErrors
               a={state.a}
@@ -218,11 +261,16 @@ function HandleInput({
 }) {
   return (
     <label className="block">
-      <span className="block text-[11px] uppercase tracking-[0.22em] text-white/45 mb-2">
+      <span className="mb-2 block text-[13px] font-medium text-white/65">
         {label}
       </span>
-      <div className="relative flex items-center h-12 rounded-full bg-white/[0.04] border border-white/12 focus-within:border-white/30 transition-colors">
-        <span className="pl-4 pr-1 text-white/45 select-none">@</span>
+      <div className="flex h-12 overflow-hidden rounded-xl border border-white/10 bg-[#09090b] transition-colors focus-within:border-[#25f4ee]/50 focus-within:ring-2 focus-within:ring-[#25f4ee]/10">
+        <span
+          aria-hidden="true"
+          className="grid h-full w-11 shrink-0 place-items-center border-r border-white/[0.07] pt-px text-[15px] font-medium leading-none text-white/40 select-none"
+        >
+          @
+        </span>
         <input
           value={value}
           onChange={(e) => onChange(e.target.value.replace(/^@+/, ""))}
@@ -230,22 +278,48 @@ function HandleInput({
           autoCapitalize="off"
           autoCorrect="off"
           spellCheck={false}
-          className="flex-1 bg-transparent outline-none text-[15px] pr-4 placeholder:text-white/30"
+          aria-label={label}
+          className="h-full min-w-0 flex-1 bg-transparent px-3 pb-0 pt-px text-[15px] leading-normal text-white outline-none placeholder:text-white/25"
         />
       </div>
     </label>
   );
 }
 
+function CompareNotes() {
+  const notes = [
+    "Both feeds scan at the same time",
+    "Videos match by their TikTok ID",
+    "Shared posts open in the normal viewer",
+  ];
+
+  return (
+    <div className="grid gap-3 border-t border-white/[0.07] pt-5 sm:grid-cols-3">
+      {notes.map((note) => (
+        <div key={note} className="flex items-start gap-2.5 text-[12px] leading-5 text-white/45">
+          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#25f4ee]" strokeWidth={2} />
+          <span>{note}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function LoadingState({ a, b }: { a: string; b: string }) {
   return (
-    <div className="space-y-6">
-      <div className="text-center text-white/65 text-[13px]">
-        Scraping <span className="text-white">@{a}</span>
-        <ArrowRight className="inline-block mx-2 h-3 w-3 text-white/40" />
-        <span className="text-white">@{b}</span> in parallel. One to three minutes for large feeds.
+    <div className="overflow-hidden rounded-2xl border border-white/[0.09] bg-[#0d0d10]">
+      <div className="flex flex-col gap-3 border-b border-white/[0.07] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-[14px] font-medium text-white">Scanning both feeds</p>
+          <div className="mt-1 flex items-center text-[12px] text-white/45">
+            <span>@{a}</span>
+            <ArrowRight className="mx-2 h-3 w-3" strokeWidth={1.8} />
+            <span>@{b}</span>
+          </div>
+        </div>
+        <p className="text-[12px] text-white/35">Large feeds can take a few minutes.</p>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 sm:p-5 md:grid-cols-5">
         {Array.from({ length: 10 }).map((_, i) => (
           <Skeleton key={i} className="aspect-[9/16] w-full rounded-xl" />
         ))}
@@ -270,19 +344,21 @@ function CompareStats({
   const denom = Math.min(aTotal, bTotal);
   const pct = denom > 0 ? Math.round((sharedCount / denom) * 100) : 0;
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-      <StatTile label={`@${a} reposts`} value={formatCount(aTotal)} />
-      <StatTile label={`@${b} reposts`} value={formatCount(bTotal)} />
-      <StatTile
-        label="Reposted by both"
-        value={formatCount(sharedCount)}
-        accent
-      />
-      <StatTile
-        label="Overlap"
-        value={`${pct}%`}
-        sub={`of smaller feed (${formatCount(denom)})`}
-      />
+    <div className="grid overflow-hidden rounded-2xl border border-white/[0.09] bg-[#0d0d10] md:grid-cols-[1.1fr_1.9fr]">
+      <div className="border-b border-white/[0.07] bg-[#25f4ee]/[0.045] p-5 md:border-b-0 md:border-r">
+        <p className="text-[12px] font-medium text-[#25f4ee]/80">Shared reposts</p>
+        <p className="mt-2 text-[38px] font-semibold leading-none tracking-[-0.04em] text-white tnum">
+          {formatCount(sharedCount)}
+        </p>
+        <p className="mt-3 text-[12px] leading-5 text-white/40">
+          Exact video matches across both scans.
+        </p>
+      </div>
+      <div className="grid grid-cols-3 divide-x divide-white/[0.07]">
+        <StatTile label={`@${a}`} value={formatCount(aTotal)} sub="visible reposts" />
+        <StatTile label={`@${b}`} value={formatCount(bTotal)} sub="visible reposts" />
+        <StatTile label="Overlap" value={`${pct}%`} sub={`of ${formatCount(denom)}`} />
+      </div>
     </div>
   );
 }
@@ -291,42 +367,32 @@ function StatTile({
   label,
   value,
   sub,
-  accent,
 }: {
   label: string;
   value: string;
   sub?: string;
-  accent?: boolean;
 }) {
   return (
-    <div
-      className={`rounded-2xl border px-5 py-5 ${
-        accent
-          ? "border-[#25f4ee]/35 bg-[#25f4ee]/[0.06]"
-          : "border-white/10 bg-white/[0.02]"
-      }`}
-    >
-      <p className="text-[11px] uppercase tracking-[0.22em] text-white/50 truncate">
+    <div className="min-w-0 px-3 py-5 sm:px-5">
+      <p className="truncate text-[11px] font-medium text-white/45">
         {label}
       </p>
-      <p
-        className={`mt-2 font-display text-[clamp(1.6rem,2.6vw,2.2rem)] tracking-[-0.015em] tnum ${
-          accent ? "text-[#25f4ee]" : "text-white"
-        }`}
-      >
+      <p className="mt-2 text-[22px] font-semibold tracking-[-0.025em] text-white tnum sm:text-[26px]">
         {value}
       </p>
-      {sub && <p className="mt-1 text-[11px] text-white/45">{sub}</p>}
+      {sub && <p className="mt-1 truncate text-[10px] text-white/35 sm:text-[11px]">{sub}</p>}
     </div>
   );
 }
 
 function EmptyOverlap({ a, b }: { a: string; b: string }) {
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/[0.02] p-10 max-w-2xl mx-auto text-center">
-      <Users className="mx-auto h-8 w-8 text-white/45" />
-      <h2 className="mt-4 font-display text-3xl tracking-tight">No shared reposts</h2>
-      <p className="mt-3 text-[14px] text-white/65 leading-[1.65] max-w-md mx-auto">
+    <div className="mx-auto max-w-2xl rounded-2xl border border-white/[0.09] bg-[#0d0d10] p-8 text-center sm:p-10">
+      <div className="mx-auto grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/[0.035]">
+        <Users className="h-4.5 w-4.5 text-white/50" strokeWidth={1.8} />
+      </div>
+      <h2 className="mt-4 text-[22px] font-semibold tracking-[-0.025em]">No shared reposts</h2>
+      <p className="mx-auto mt-3 max-w-md text-[14px] leading-6 text-white/50">
         @{a} and @{b} did not repost any of the same videos within the visible
         feeds. Try comparing creators in the same niche.
       </p>
@@ -348,8 +414,10 @@ function SideErrors({
   onRetry: () => void;
 }) {
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/[0.02] p-8 max-w-2xl mx-auto text-center space-y-4">
-      <AlertCircle className="mx-auto h-8 w-8 text-white/55" />
+    <div className="mx-auto max-w-2xl space-y-4 rounded-2xl border border-white/[0.09] bg-[#0d0d10] p-8 text-center">
+      <div className="mx-auto grid h-10 w-10 place-items-center rounded-xl border border-red-400/15 bg-red-400/[0.05]">
+        <AlertCircle className="h-4.5 w-4.5 text-red-300/70" strokeWidth={1.8} />
+      </div>
       <div className="space-y-1 text-[14px]">
         {sideA.kind === "error" && (
           <p>

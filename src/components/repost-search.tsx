@@ -109,7 +109,7 @@ const SORT_LABEL: Record<SortKey, string> = Object.fromEntries(
 
 // Sort a copy of the canonical feed list. "feed" returns the input untouched
 // (newest-reposted-first, TikTok's native order). "oldest_repost" reverses it
-// — feed position is the exact repost order, so this is the user's oldest
+// Feed position is the exact repost order, so this is the user's oldest
 // repost first (within the loaded set; load "All" for their true first ever).
 // This is distinct from "oldest/newest upload" (createTime, the video's post
 // date). All sorts are stable, so ties fall back to feed order. We omit a
@@ -285,7 +285,7 @@ export function RepostSearch({
             <Results
               data={state.data}
               aggregates={aggregates}
-              // One-off unbounded fetch. Don't mutate `limit` — that would make
+              // One-off unbounded fetch. Don't mutate `limit`; that would make
               // every subsequent search default to a full deep scrape.
               onLoadAll={() => run(state.data.username, 0)}
               onRefresh={() => run(state.data.username, state.limit, true)}
@@ -313,10 +313,10 @@ function SearchPanel({
   setLimit: (n: number) => void;
 }) {
   return (
-    <div className="glass-strong rounded-3xl p-3 sm:p-4 max-w-[42rem] mx-auto">
+    <div className="glass-strong rounded-2xl p-3 sm:p-4 max-w-[42rem] mx-auto">
       <form
         onSubmit={onSubmit}
-        className="flex items-center gap-3 rounded-2xl bg-black/30 border border-white/10 px-4 sm:px-5 h-14 sm:h-16 focus-within:border-white/25 transition-colors"
+        className="flex items-center gap-3 rounded-xl bg-black/30 border border-white/10 px-4 sm:px-5 h-14 sm:h-16 focus-within:border-white/25 transition-colors"
       >
         <Search className="h-4 w-4 text-white/35 flex-none" />
         <label
@@ -352,7 +352,7 @@ function SearchPanel({
           type="submit"
           size="md"
           disabled={loading}
-          className="rounded-xl"
+          className="rounded-lg"
         >
           {loading ? (
             <>
@@ -685,7 +685,7 @@ function Results({
           </h2>
           <p className="mt-3 text-[14px] text-white/70 leading-[1.65] max-w-md mx-auto">
             @{username}&apos;s profile loaded, but TikTok returned an empty
-            repost list — a quiet rate-limit signal. Wait a few minutes and
+            repost list, a quiet rate-limit signal. Wait a few minutes and
             retry, or try a different handle in the meantime. This is
             <span className="text-white"> not </span>
             the same as a private reposts tab.
@@ -703,7 +703,7 @@ function Results({
           <p className="mt-3 text-[14px] text-white/70 leading-[1.65] max-w-md mx-auto">
             TikTok rendered its &quot;Something went wrong&quot; panel for
             @{username}&apos;s reposts tab and our auto-refresh didn&apos;t
-            recover it. Usually transient — search the handle again in 30s.
+            recover it. Usually transient. Search the handle again in 30s.
           </p>
         </div>
       );
@@ -847,7 +847,7 @@ function TrackingNote({
       <p className="leading-[1.6]">
         TikTok doesn&apos;t report repost times. We log when each repost first
         appears in <span className="text-white/80">@{username}</span>&apos;s
-        feed — tracking since <span className="text-white/80">{date}</span>.{" "}
+        feed, tracking since <span className="text-white/80">{date}</span>.{" "}
         {observed > 0 ? (
           <>
             <span className="text-[#25f4ee] tnum">{observed}</span> dated from
@@ -1205,7 +1205,7 @@ function TopCreators({
 }
 
 // Distribution of the *upload* dates (createTime) of the reposted videos.
-// This is real, always-present data — unlike repost time, which TikTok hides.
+// This is real, always-present data, unlike repost time, which TikTok hides.
 // It answers "what era of content does this account amplify?". Granularity
 // adapts to the span so the strip never becomes hundreds of hairline bars.
 function UploadTimeline({ reposts }: { reposts: Repost[] }) {
@@ -1348,7 +1348,7 @@ function UploadTimeline({ reposts }: { reposts: Repost[] }) {
                       style={{ height: `${h}%` }}
                     />
                   ) : (
-                    // empty period — faint baseline tick so gaps read as gaps
+                    // Empty period. A faint baseline tick makes gaps readable.
                     <div className="w-full max-w-[72px] h-[2px] rounded-full bg-white/10" />
                   )}
                 </div>
@@ -1502,7 +1502,7 @@ function PartialBanner({
   captcha?: boolean;
   onLoadAll?: () => void;
 }) {
-  // Captcha is a hard stop — nothing the user can do without a solver.
+  // Captcha is a hard stop. Nothing the user can do without a solver.
   if (captcha) {
     return (
       <div className="rounded-2xl border border-[#ff2d8a]/30 bg-[#ff2d8a]/[0.06] px-5 py-4 flex items-start gap-3">
@@ -1516,7 +1516,7 @@ function PartialBanner({
       </div>
     );
   }
-  // Otherwise the walk just stopped short of the end — more is loadable.
+  // Otherwise the walk just stopped short of the end, so more is loadable.
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-5 py-4 flex items-center gap-3 flex-wrap">
       <TriangleAlert className="h-4 w-4 flex-none text-white/45" />

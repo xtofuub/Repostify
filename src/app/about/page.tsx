@@ -1,21 +1,20 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ArrowUpRight } from "lucide-react";
+import { BookOpen, Search } from "lucide-react";
 import {
   BackgroundVideo,
   GuideLines,
   LogoMark,
-  PrimaryButton,
   SectionLabel,
 } from "@/components/brand";
 import { canonical, SITE_DESCRIPTION, SITE_NAME } from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: "About",
-  description: `${SITE_NAME} is a small, read-only tool for viewing every repost on a public TikTok profile. ${SITE_DESCRIPTION}`,
+  description: `${SITE_NAME} is a local-first, read-only tool for scanning the reposts TikTok Web exposes for a profile. ${SITE_DESCRIPTION}`,
   alternates: { canonical: canonical("/about") },
   openGraph: {
-    title: `About · ${SITE_NAME}`,
+    title: `About | ${SITE_NAME}`,
     description:
       "Why Repostify exists, how it works under the hood, and what it does not do.",
     url: canonical("/about"),
@@ -50,105 +49,93 @@ export default function AboutPage() {
           <SectionLabel>About</SectionLabel>
           <h1 className="mt-6 font-display text-[clamp(2.4rem,6vw,5rem)] leading-[0.95] tracking-[-0.02em]">
             A small tool for a{" "}
-            <span className="italic text-[#25f4ee]">specific question.</span>
+            <span className="inline-block pb-1 italic leading-[1.1] text-[#25f4ee]">
+              specific question.
+            </span>
           </h1>
 
           <div className="mt-12 space-y-7 text-[15.5px] leading-[1.75] text-white/75 max-w-[68ch]">
             <p>
-               Repostify is a one-page web utility that opens any public
-              TikTok profile, walks its reposts tab, and lays every
-              repost out as a clean grid you can play in the browser. It
-              answers a narrow question: what does this account actually
-              share with the audience it has built?
+              Repostify is a local-first Windows app that opens a TikTok
+              profile, scans the reposts TikTok Web exposes, and lays them
+              out in a searchable grid. It answers a narrow question: what
+              does this account choose to share?
             </p>
             <p>
-              The reposts feed exists on TikTok already. It is public on
-              accounts that have not hidden it. But scrolling it by hand
-              inside the app is slow, the videos auto-play one at a time,
-              and there is no overview of who an account amplifies. This
-              tool flattens the feed into a single grid, sums the engagement,
-              ranks the most-amplified creators, and lets you click any cover
-              to play it inline.
+              TikTok already has a reposts tab, but it is built for browsing
+              one post at a time. Repostify turns that feed into an overview
+              with filters, aggregate engagement, top amplified creators,
+              exact original publish dates, and in-app playback.
             </p>
             <h2 className="font-display text-[clamp(1.6rem,3vw,2.2rem)] leading-[1.05] tracking-[-0.015em] pt-6 text-white">
               How it works
             </h2>
             <p>
-              A headless Chromium session loads the public profile page like
-              any visitor, dismisses the cookie banner, clicks the reposts
-              tab, and intercepts TikTok&apos;s own feed request as it goes
-              over the wire. The data on screen here is the data the page
-              would have shown a person scrolling. Public scans work without a
-              TikTok account; the desktop app can optionally reuse a TikTok
-              session for profiles that require login.
+              CloakBrowser loads the profile page, opens the Reposts tab, and
+              captures TikTok Web&apos;s own feed response. Repostify follows the
+              returned cursor until the selected limit is reached or TikTok
+              reports that the feed is complete. No third-party repost API is
+              involved.
             </p>
             <p>
-              Successful desktop scans are cached locally for 15 minutes so a
-              repeat fetch is instant. The cache is plain JSON, not a native
-              database, and can be cleared from Settings at any time.
+              Public profiles usually work anonymously. The desktop app can
+              optionally reuse a connected TikTok session for profiles the
+              signed-in account is allowed to view. That session stays on the
+              device.
             </p>
             <p>
-              Images and thumbnails are hot-link protected on TikTok&apos;s
-              CDN, so they are streamed through a server-side proxy that
-              sets the right Referer header. Video playback uses TikTok&apos;s
-              native embed first, with a direct local fallback when needed.
+              Successful scans are cached locally as JSON for 15 minutes, so
+              repeating the same request is instant. The cache can be cleared
+              from Settings at any time.
             </p>
             <h2 className="font-display text-[clamp(1.6rem,3vw,2.2rem)] leading-[1.05] tracking-[-0.015em] pt-6 text-white">
               What it does not do
             </h2>
             <p>
-               Repostify captures the first batch of reposts that TikTok
-              hands an anonymous visitor, which is roughly thirty items per
-              profile per session. The moment TikTok throws a slider
-              captcha, the tool stops. It does not solve captchas. It does
-              not run a proxy farm. It does not log in with a fake account.
-              If you need a continuous feed of every repost across millions
-              of profiles, you need a paid service that pays a person to
-              solve captchas all day, and that is a different product
-              entirely.
+              Repostify does not bypass TikTok&apos;s access controls. A connected
+              session helps only when TikTok Web exposes the profile to that
+              account. Some private or audience-controlled profiles remain
+              available only in TikTok&apos;s mobile app.
             </p>
             <p>
-              It also cannot read profiles whose reposts tab is set to
-              private, which is the default on many accounts. That is a
-              choice the creator made on TikTok itself, not a limitation of
-              this tool.
+              TikTok may also interrupt a scan with a captcha, an empty feed,
+              or a temporary rate limit. Repostify keeps any items already
+              captured and reports a partial result. It does not solve
+              captchas, use fake accounts, or run a proxy farm.
             </p>
             <h2 className="font-display text-[clamp(1.6rem,3vw,2.2rem)] leading-[1.05] tracking-[-0.015em] pt-6 text-white">
               Who it is for
             </h2>
             <p>
-              Anyone who watches what other people watch. Marketers checking
-              what creators a brand-aligned account actually boosts.
-              Researchers mapping taste graphs across handles. Independent
-              creators studying what people they look up to keep returning
-              to. Reposts are the rarest signal on the platform because
-              they cost the most: when someone hits repost, they are
-              telling their whole audience to watch this. That makes the
-              repost feed a sharper read on a creator&apos;s taste than the
-              follow graph or the like history.
+              Repostify is useful for people studying what an account chooses
+              to amplify: creators reviewing their niche, researchers mapping
+              public sharing patterns, and marketers checking which voices a
+              public account repeatedly boosts.
             </p>
             <h2 className="font-display text-[clamp(1.6rem,3vw,2.2rem)] leading-[1.05] tracking-[-0.015em] pt-6 text-white">
               Affiliation
             </h2>
             <p>
-               Repostify is an independent project. It is not affiliated
-              with TikTok, ByteDance, or any of their products. It reads
-              the same public page any visitor can reach.
+              Repostify is an independent project. It is not affiliated
+              with TikTok, ByteDance, or any of their products. It only reads
+              what TikTok Web returns to the active browser session.
             </p>
           </div>
 
           <div className="mt-14 pt-10 border-t border-white/10 flex flex-wrap items-center gap-4">
-            <Link href="/">
-              <PrimaryButton size="lg">
-                Try the tool
-                <ArrowUpRight className="ml-1 h-4 w-4" />
-              </PrimaryButton>
+            <Link
+              href="/"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-white/80 bg-white px-5 text-[13px] font-semibold text-[#0a0a0b] transition-colors hover:bg-white/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b]"
+            >
+              <Search className="h-4 w-4" />
+              Search a profile
             </Link>
             <Link
               href="/guide"
-              className="text-[13px] uppercase tracking-[0.22em] text-white/55 hover:text-white transition-colors"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-white/10 px-3 text-[12px] font-medium text-white/60 transition-colors hover:border-white/20 hover:bg-white/[0.04] hover:text-white"
             >
-              Read the guide
+              <BookOpen className="h-3.5 w-3.5" />
+              Guide
             </Link>
           </div>
         </main>

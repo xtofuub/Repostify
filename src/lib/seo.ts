@@ -3,10 +3,10 @@ export const SITE_URL =
 
 export const SITE_NAME = "Repostify";
 
-export const SITE_TAGLINE = "See every TikTok repost on any public profile";
+export const SITE_TAGLINE = "Search the repost trail";
 
 export const SITE_DESCRIPTION =
-  "Free TikTok repost viewer and analyzer. See every video someone reposted on TikTok, sorted by recency, with play counts, likes, and top amplified creators. No login, no signup, no API key — paste any handle.";
+  "Search visible TikTok reposts by keyword, compare two accounts, play videos, and spot the creators, topics, and patterns that keep showing up.";
 
 // Primary keyword targets, in order of search volume:
 // "tiktok repost viewer", "see tiktok reposts", "tiktok reposts list",

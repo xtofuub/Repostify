@@ -1,24 +1,23 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ArrowUpRight } from "lucide-react";
+import { Info, Search } from "lucide-react";
 import {
   BackgroundVideo,
   GuideLines,
   LogoMark,
-  PrimaryButton,
   SectionLabel,
 } from "@/components/brand";
-import { canonical, POPULAR_HANDLES, SITE_NAME } from "@/lib/seo";
+import { canonical, SITE_NAME } from "@/lib/seo";
 
 export const metadata: Metadata = {
-  title: "How to see TikTok reposts on any profile",
+  title: "How to view TikTok reposts",
   description:
-    "A practical guide to viewing every repost on a public TikTok profile. What the reposts tab is, why some are hidden, how to read the data, and the limits of anonymous scraping.",
+    "A practical guide to scanning visible TikTok reposts, using a connected session, choosing a fetch limit, and reading the result page.",
   alternates: { canonical: canonical("/guide") },
   openGraph: {
-    title: `How to see TikTok reposts · ${SITE_NAME}`,
+    title: `How to view TikTok reposts | ${SITE_NAME}`,
     description:
-      "Practical guide to viewing every repost on a public TikTok profile.",
+      "Scan visible TikTok reposts and understand the results.",
     url: canonical("/guide"),
     type: "article",
   },
@@ -31,9 +30,9 @@ function ArticleJsonLd() {
   const data = {
     "@context": "https://schema.org",
     "@type": "Article",
-    headline: "How to see TikTok reposts on any profile",
+    headline: "How to view TikTok reposts",
     description:
-      "A practical guide to viewing every repost on a public TikTok profile.",
+      "A practical guide to scanning visible TikTok reposts and reading the results.",
     author: { "@type": "Organization", name: SITE_NAME },
     publisher: { "@type": "Organization", name: SITE_NAME },
     mainEntityOfPage: canonical("/guide"),
@@ -54,16 +53,16 @@ function HowToJsonLd() {
     "@type": "HowTo",
     name: "How to see someone's TikTok reposts",
     description:
-      "View every public repost on a TikTok profile in seconds, with no login, no signup, and no API key.",
-    totalTime: "PT30S",
-    supply: [{ "@type": "HowToSupply", name: "A public TikTok username" }],
+      "Scan the reposts TikTok Web exposes for a profile, with an optional connected TikTok session in the desktop app.",
+    totalTime: "PT1M",
+    supply: [{ "@type": "HowToSupply", name: "A TikTok username" }],
     tool: [{ "@type": "HowToTool", name: "Repostify" }],
     step: [
       {
         "@type": "HowToStep",
         position: 1,
         name: "Open Repostify",
-        text: "Go to repostify.app in any browser. No account needed.",
+        text: "Open Repostify. Public profiles usually work without connecting TikTok.",
         url: canonical("/"),
       },
       {
@@ -76,7 +75,7 @@ function HowToJsonLd() {
         "@type": "HowToStep",
         position: 3,
         name: "Pick a fetch limit",
-        text: "Choose 30, 60, 120, 250, or All. Smaller limits return faster.",
+        text: "Choose 30, 60, 120, 250, or All. Repostify follows the feed until it reaches that limit or TikTok stops returning items.",
       },
       {
         "@type": "HowToStep",
@@ -120,14 +119,14 @@ export default function GuidePage() {
         <main className="max-w-[60rem] mx-auto px-6 pt-16 pb-24">
           <SectionLabel>Guide</SectionLabel>
           <h1 className="mt-6 font-display text-[clamp(2.4rem,6vw,5rem)] leading-[0.95] tracking-[-0.02em]">
-            How to see TikTok reposts{" "}
-            <span className="italic text-[#25f4ee]">on any profile.</span>
+            How to view TikTok{" "}
+            <span className="inline-block pb-1 italic leading-[1.1] text-[#25f4ee]">
+              reposts.
+            </span>
           </h1>
           <p className="mt-6 text-[15.5px] text-white/65 max-w-[60ch]">
-            Updated for the 2026 TikTok web layout. Covers the reposts tab,
-            the private-by-default switch, the captcha cap on anonymous
-            scrolling, and how to read the engagement numbers on a repost
-            feed.
+            Learn what Repostify can access, how fetch limits work, and what
+            each part of the result page means.
           </p>
 
           <div className="mt-12 space-y-7 text-[15.5px] leading-[1.75] text-white/75 max-w-[68ch]">
@@ -180,65 +179,47 @@ export default function GuidePage() {
               Why some profiles have no reposts tab
             </h2>
             <p>
-              TikTok lets users hide their reposts tab from public view.
-              The toggle lives under Privacy in the app settings. The
-              default behavior has shifted over time, and a sizable
-              fraction of creators have flipped the toggle to private
-              after the analytics ecosystem started reading their tab. If
-              you load a profile and the Reposts tab is missing, the
-              account has hidden it. There is no way around that without
-               a logged-in connection to the account, which Repostify
-              does not use.
+              TikTok lets users hide their reposts tab or restrict the whole
+              profile with audience controls. Public scans cannot read a tab
+              TikTok Web does not render.
             </p>
             <p>
-              In that case, try a different handle. Larger entertainment
-              and culture accounts often keep their reposts public because
-              the reposts themselves are part of the persona. Smaller
-              private creators frequently hide it.
+              The desktop app can connect your TikTok account and reuse that
+              session. This can unlock profiles the signed-in account is
+              allowed to view, but only when TikTok Web exposes the feed.
+              Some profiles remain available only in TikTok&apos;s mobile app.
             </p>
 
             <h2 className="font-display text-[clamp(1.6rem,3vw,2.2rem)] leading-[1.05] tracking-[-0.015em] pt-6 text-white">
-               How Repostify captures the feed
+              How Repostify captures the feed
             </h2>
             <p>
-               Repostify loads the public profile in a real, headless
-              Chromium browser. It dismisses the cookie banner, locates
-              the Reposts tab, clicks it, and listens to the network for
-              the feed request TikTok itself fires when you switch tabs.
-              That request returns a JSON payload with the video data the
-              tab is about to render. The tool reads that payload directly
-              instead of scraping the rendered HTML, which makes the
-              extraction stable across UI updates.
+              Repostify loads the profile in CloakBrowser, opens the Reposts
+              tab, and listens for the feed request TikTok Web makes. It then
+              follows the returned cursor until your chosen limit is reached
+              or TikTok reports that the feed is complete. No third-party
+              repost API is involved.
             </p>
             <p>
-              Every cover image and avatar then routes through a
-              server-side image proxy that sets the right Referer header,
-              because TikTok&apos;s CDN refuses requests that look like
-              hot-linking. Videos play through TikTok&apos;s own public
-              embed player, which means the engagement counters on the
-              player itself stay live and click through to the original
-              page.
+              Covers and avatars pass through a local image proxy because
+              TikTok&apos;s CDN blocks ordinary hot-linking. Videos use TikTok&apos;s
+              native player first, with a direct fallback when the embed is
+              unavailable.
             </p>
 
             <h2 className="font-display text-[clamp(1.6rem,3vw,2.2rem)] leading-[1.05] tracking-[-0.015em] pt-6 text-white">
-              The thirty-item cap
+              Fetch limits and partial scans
             </h2>
             <p>
-              The hardest limit you will hit is the captcha gate. The
-              moment an anonymous session asks for a second page of
-               reposts, TikTok throws a slider puzzle. Repostify reads
-              the first batch, which TikTok hands over without a fight,
-              and stops. That batch is typically twenty-eight to thirty-
-              two items depending on the account. The result page tells
-              you when this happened so the partial-batch state is never
-              silent.
+              Choose 30, 60, 120, 250, or All before scanning. The All option
+              keeps requesting pages until TikTok says there are no more
+              reposts.
             </p>
             <p>
-              For most use cases the first batch is enough. It is the
-              freshest layer of the repost feed and shows the current
-              direction of the account. If you need everything an account
-              has ever reposted, you need a service that solves captchas,
-              and that is a paid product class.
+              TikTok can still interrupt a large scan with a captcha, an
+              empty response, a rate limit, or a temporary error. Repostify
+              keeps the items already captured and labels the result as
+              partial instead of pretending the feed is complete.
             </p>
 
             <h2 className="font-display text-[clamp(1.6rem,3vw,2.2rem)] leading-[1.05] tracking-[-0.015em] pt-6 text-white">
@@ -252,29 +233,28 @@ export default function GuidePage() {
             </p>
             <p>
               Below the profile is a row of aggregate counters. The
-              numbers sum across every repost in the batch: total plays
+              numbers sum across every repost returned by the scan: total plays
               across reposts, total likes, total comments, total shares,
               and the count of unique creators referenced. The aggregate
-              gives you the center of gravity of the batch in one glance.
+              gives you the center of gravity of the feed in one glance.
               An account with five reposts that pull a hundred million
               plays each has a different profile than an account with
-              thirty reposts averaging a few thousand plays.
+              many reposts averaging a few thousand plays.
             </p>
             <p>
-               Then comes the most-amplified creators chart. Repostify
+              Then comes the most-amplified creators chart. Repostify
               counts how often each creator shows up across the repost
-              batch and ranks them. This is usually the most revealing
+              scan and ranks them. This is usually the most revealing
               part of the page. A profile that reposts ten different
               videos from the same friend reads completely differently
-              from one that distributes its reposts evenly across thirty
-              unrelated creators. Click any handle in the ranking to
+              from one that distributes its reposts across many unrelated
+              creators. Click any handle in the ranking to
               open that creator on TikTok directly.
             </p>
             <p>
-              The bottom of the page is the reel itself: every visible
-              repost as a 9:16 thumbnail. Click any cover to open the
-              video in the in-browser player. The player closes on ESC or
-              on a click outside the frame.
+              The bottom of the page is the reel itself. Click a cover to
+              open the player, view the original publish date and engagement,
+              or move through the feed with Previous and Next.
             </p>
 
             <h2 className="font-display text-[clamp(1.6rem,3vw,2.2rem)] leading-[1.05] tracking-[-0.015em] pt-6 text-white">
@@ -287,51 +267,31 @@ export default function GuidePage() {
               native client is paginated, the video plays one at a time,
               there is no aggregate view, and there is no overview of
               creators most amplified. That is the workflow problem
-               Repostify flattens.
+              Repostify flattens.
             </p>
             <p>
               Third-party analytics platforms sometimes surface repost
               data, but they generally require a logged-in seat and a
               paid subscription, and they typically only include accounts
-              they have been licensed to track. For a read of any single
-              public profile in seconds, the lightweight scraper is
-              usually the faster path.
+              they have been licensed to track. For a focused overview of one
+              visible profile, Repostify is usually the faster path.
             </p>
-
-            <h2 className="font-display text-[clamp(1.6rem,3vw,2.2rem)] leading-[1.05] tracking-[-0.015em] pt-6 text-white">
-              Try it
-            </h2>
-            <p>
-              Start with a handle whose reposts tab is publicly open. A
-              few that consistently work:
-            </p>
-            <ul className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[14px]">
-              {POPULAR_HANDLES.map((h) => (
-                <li key={h}>
-                  <Link
-                    href={`/u/${h}`}
-                    className="block rounded-lg border border-white/10 bg-white/[0.015] hover:bg-white/[0.04] hover:border-white/25 transition-colors px-3 py-2"
-                  >
-                    <span className="text-white/45">@</span>
-                    {h}
-                  </Link>
-                </li>
-              ))}
-            </ul>
           </div>
 
           <div className="mt-14 pt-10 border-t border-white/10 flex flex-wrap items-center gap-4">
-            <Link href="/">
-              <PrimaryButton size="lg">
-                Open the analyzer
-                <ArrowUpRight className="ml-1 h-4 w-4" />
-              </PrimaryButton>
+            <Link
+              href="/"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-white/80 bg-white px-5 text-[13px] font-semibold text-[#0a0a0b] transition-colors hover:bg-white/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b]"
+            >
+              <Search className="h-4 w-4" />
+              Search a profile
             </Link>
             <Link
               href="/about"
-              className="text-[13px] uppercase tracking-[0.22em] text-white/55 hover:text-white transition-colors"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-white/10 px-3 text-[12px] font-medium text-white/60 transition-colors hover:border-white/20 hover:bg-white/[0.04] hover:text-white"
             >
-              About the tool
+              <Info className="h-3.5 w-3.5" />
+              About
             </Link>
           </div>
         </main>

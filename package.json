@@ -1,7 +1,7 @@
 {
   "name": "repostify",
-  "version": "0.1.7",
-  "description": "A polished Windows app for browsing and comparing TikTok reposts.",
+  "version": "0.1.8",
+  "description": "Search, play, and compare visible TikTok repost trails.",
   "author": "xtofuub",
   "license": "MIT",
   "private": true,
