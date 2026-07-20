@@ -1,8 +1,9 @@
 {
   "name": "repostify",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "A polished Windows app for browsing and comparing TikTok reposts.",
   "author": "xtofuub",
+  "license": "MIT",
   "private": true,
   "scripts": {
     "dev": "next dev",

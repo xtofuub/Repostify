@@ -8,7 +8,13 @@ app.on("window-all-closed", () => {});
 
 app.whenReady().then(async () => {
   const windows = [];
-  for (const state of ["available", "downloading", "installing", "error"]) {
+  for (const state of [
+    "available",
+    "downloading",
+    "verifying",
+    "installing",
+    "error",
+  ]) {
     const window = new BrowserWindow({
       width: 500,
       height: 452,
@@ -22,9 +28,9 @@ app.whenReady().then(async () => {
       },
     });
     const query = {
-      current: "0.1.4",
-      latest: "0.1.5",
-      bytes: String(193_423_338),
+      current: "0.1.6",
+      latest: "0.1.7",
+      bytes: String(142_300_000),
       kind: "Setup",
     };
     if (state !== "available") query.preview = state;

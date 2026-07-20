@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
+  ArrowLeft,
+  ArrowRight,
   X,
   Heart,
   MessageCircle,
@@ -13,6 +15,7 @@ import {
 import type { Repost } from "@/lib/tiktok";
 import {
   formatCount,
+  formatDuration,
   formatRelativeTime,
   isObservedRepost,
   msToRelative,
@@ -28,6 +31,23 @@ function proxiedMedia(url: string, postUrl?: string): string {
   const params = new URLSearchParams({ u: url });
   if (postUrl) params.set("o", postUrl);
   return `/api/video?${params.toString()}`;
+}
+
+function formatEngagement(repost: Repost): string {
+  if (repost.stats.plays <= 0) return "N/A";
+  const interactions =
+    repost.stats.likes + repost.stats.comments + repost.stats.shares;
+  const percentage = (interactions / repost.stats.plays) * 100;
+  return `${percentage >= 10 ? percentage.toFixed(0) : percentage.toFixed(1)}%`;
+}
+
+function formatPostedDate(unixSec: number): string {
+  if (unixSec <= 0) return "N/A";
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(unixSec * 1000));
 }
 
 export function RepostPlayer({
@@ -57,12 +77,16 @@ export function RepostPlayer({
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const photoAudioRef = useRef<HTMLAudioElement>(null);
   const [photoState, setPhotoState] = useState({ repostId: "", index: 0 });
-  const [videoFallbackId, setVideoFallbackId] = useState<string | null>(null);
+  const [directPlayerId, setDirectPlayerId] = useState<string | null>(null);
   const imageUrls = repost?.imageUrls ?? [];
   const isPhoto = imageUrls.length > 0;
   const photoIndex = photoState.repostId === repostId ? photoState.index : 0;
   const photoMusicUrl =
     isPhoto && repost?.musicUrl ? repost.musicUrl : "";
+  const closePlayer = useCallback(() => {
+    setDirectPlayerId(null);
+    onClose();
+  }, [onClose]);
 
   // TikTok iframe player exposes a postMessage API. Spec:
   // https://developers.tiktok.com/doc/embed-player. Posting {type:"unMute"}
@@ -135,17 +159,23 @@ export function RepostPlayer({
 
   const goPrev = useCallback(() => {
     if (index === null) return;
-    if (index > 0) onIndexChange(index - 1);
+    if (index > 0) {
+      setDirectPlayerId(null);
+      onIndexChange(index - 1);
+    }
   }, [index, onIndexChange]);
   const goNext = useCallback(() => {
     if (index === null) return;
-    if (index < reposts.length - 1) onIndexChange(index + 1);
+    if (index < reposts.length - 1) {
+      setDirectPlayerId(null);
+      onIndexChange(index + 1);
+    }
   }, [index, onIndexChange, reposts.length]);
 
   useEffect(() => {
     if (!repostId) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") closePlayer();
       if (e.key === "ArrowDown" || e.key === "ArrowRight" || e.key === "j") {
         e.preventDefault();
         goNext();
@@ -162,7 +192,7 @@ export function RepostPlayer({
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = prev;
     };
-  }, [goNext, goPrev, onClose, repostId]);
+  }, [closePlayer, goNext, goPrev, repostId]);
 
   function onWheel(e: React.WheelEvent) {
     const now = Date.now();
@@ -188,7 +218,7 @@ export function RepostPlayer({
           <button
             type="button"
             aria-label="Close"
-            onClick={onClose}
+            onClick={closePlayer}
             className="absolute inset-0 bg-black/80 backdrop-blur-xl"
           />
 
@@ -248,7 +278,19 @@ export function RepostPlayer({
                     />
                   )}
                 </button>
-              ) : repost.playUrl && videoFallbackId !== repost.id ? (
+              ) : repost.id && directPlayerId !== repost.id ? (
+                <iframe
+                  ref={iframeRef}
+                  key={`tiktok-${repost.id}`}
+                  src={`https://www.tiktok.com/player/v1/${repost.id}?autoplay=1&loop=1&mute=0&music_info=0&description=0&rel=0&native_context_menu=0&closed_caption=1`}
+                  title={`Repost ${repost.id}`}
+                  allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+                  allowFullScreen
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  className="h-full w-full border-0"
+                  loading="eager"
+                />
+              ) : repost.playUrl ? (
                 <video
                   key={`direct-${repost.id}`}
                   src={proxiedMedia(repost.playUrl, repost.webUrl)}
@@ -258,23 +300,9 @@ export function RepostPlayer({
                   playsInline
                   controls
                   preload="metadata"
-                  onError={() => setVideoFallbackId(repost.id)}
+                  onError={() => setDirectPlayerId(null)}
                   className="h-full w-full bg-black object-contain"
                 />
-              ) : repost.id ? (
-                <>
-                  <iframe
-                    ref={iframeRef}
-                    key={repost.id}
-                    src={`https://www.tiktok.com/player/v1/${repost.id}?autoplay=1&loop=1&mute=0&music_info=0&description=0&rel=0&native_context_menu=0&closed_caption=1`}
-                    title={`Repost ${repost.id}`}
-                    allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
-                    allowFullScreen
-                    referrerPolicy="strict-origin-when-cross-origin"
-                    className="h-full w-full border-0"
-                    loading="eager"
-                  />
-                </>
               ) : (
                 <div className="flex flex-col items-center text-white/55 gap-2">
                   <Play className="h-10 w-10" />
@@ -292,7 +320,7 @@ export function RepostPlayer({
                 </span>
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={closePlayer}
                   className="inline-flex items-center justify-center h-9 w-9 rounded-full border border-white/15 bg-white/[0.04] hover:bg-white/[0.1] transition-colors cursor-pointer"
                   aria-label="Close"
                 >
@@ -334,6 +362,37 @@ export function RepostPlayer({
                   <span className="text-white/45">No caption.</span>
                 )}
               </p>
+
+              <dl className="grid grid-cols-3 divide-x divide-white/10 rounded-xl border border-white/10 bg-white/[0.025] py-3">
+                <div className="px-3">
+                  <dt className="text-[9px] uppercase tracking-[0.16em] text-white/35">
+                    Length
+                  </dt>
+                  <dd className="mt-1 text-[12px] font-medium text-white tnum">
+                    {isPhoto
+                      ? `${imageUrls.length} photo${imageUrls.length === 1 ? "" : "s"}`
+                      : repost.duration > 0
+                        ? formatDuration(repost.duration)
+                        : "N/A"}
+                  </dd>
+                </div>
+                <div className="px-3">
+                  <dt className="text-[9px] uppercase tracking-[0.16em] text-white/35">
+                    Posted
+                  </dt>
+                  <dd className="mt-1 whitespace-nowrap text-[12px] font-medium text-white tnum">
+                    {formatPostedDate(repost.createTime)}
+                  </dd>
+                </div>
+                <div className="px-3">
+                  <dt className="text-[9px] uppercase tracking-[0.16em] text-white/35">
+                    Engagement
+                  </dt>
+                  <dd className="mt-1 text-[12px] font-medium text-white tnum">
+                    {formatEngagement(repost)}
+                  </dd>
+                </div>
+              </dl>
 
               {/* Repost timing. TikTok never reports the repost timestamp on
                   the anonymous endpoint, so we degrade gracefully:
@@ -422,6 +481,43 @@ export function RepostPlayer({
                 Open on TikTok
                 <ExternalLink className="h-3.5 w-3.5" />
               </a>
+
+              {!isPhoto && repost.playUrl && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDirectPlayerId((current) =>
+                      current === repost.id ? null : repost.id,
+                    )
+                  }
+                  className="text-[11px] text-white/45 transition-colors hover:text-white"
+                >
+                  {directPlayerId === repost.id
+                    ? "Use TikTok player"
+                    : "Video unavailable? Try fallback player"}
+                </button>
+              )}
+
+              <div className="mt-auto grid grid-cols-2 overflow-hidden rounded-full border border-white/15 bg-white/[0.035]">
+                <button
+                  type="button"
+                  onClick={goPrev}
+                  disabled={index === null || index <= 0}
+                  className="inline-flex h-11 items-center justify-center gap-2 px-3 text-[11px] font-medium uppercase tracking-[0.12em] text-white transition-[background-color,opacity] hover:bg-white/[0.08] active:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  onClick={goNext}
+                  disabled={index === null || index >= reposts.length - 1}
+                  className="inline-flex h-11 items-center justify-center gap-2 border-l border-white/15 px-3 text-[11px] font-medium uppercase tracking-[0.12em] text-white transition-[background-color,opacity] hover:bg-white/[0.08] active:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
+                >
+                  Next
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </aside>
           </motion.div>
         </motion.div>

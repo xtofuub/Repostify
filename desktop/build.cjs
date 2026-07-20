@@ -97,6 +97,14 @@ function pruneUnusedElectronRuntime() {
   }
 }
 
+function pruneWorkspaceArtifacts() {
+  const standalone = path.join(root, ".next", "standalone");
+  for (const name of [".debug", "release", "repost-cache"]) {
+    const target = path.join(standalone, name);
+    if (existsSync(target)) rmSync(target, { recursive: true, force: true });
+  }
+}
+
 function normalizeTracedPlaywrightImport() {
   const serverRoot = path.join(root, ".next", "standalone", ".next", "server");
   const aliasRoot = path.join(root, ".next", "standalone", ".next", "node_modules");
@@ -143,6 +151,7 @@ rmSync(path.join(root, ".next", "standalone"), {
   force: true,
 });
 run(node, [nextCli, "build"]);
+pruneWorkspaceArtifacts();
 normalizeTracedPlaywrightImport();
 pruneUnusedElectronRuntime();
 copyRuntime();

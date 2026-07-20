@@ -43,26 +43,29 @@ function setState(detail) {
   elements.error.textContent = "";
 
   if (state === "downloading") {
-    elements.title.textContent = "Downloading the update";
+    elements.title.textContent = "Downloading update.";
     elements.description.textContent =
-      "Keep this window open while Repostify downloads the new build.";
+      "Keep this window open. Repostify will verify the file before anything is installed.";
     setProgress(detail.progress);
     elements.progressBytes.textContent = detail.total
       ? `${formatBytes(detail.downloaded || 0)} of ${formatBytes(detail.total)}`
       : "Starting download";
   } else if (state === "verifying") {
-    elements.title.textContent = "Checking the download";
+    elements.title.textContent = "Verifying download.";
     elements.description.textContent =
-      "Repostify is verifying the file before it is allowed to run.";
+      "The download is complete. Its SHA-256 signature is being checked now.";
     setProgress(1);
     elements.progressBytes.textContent = "Security check in progress";
     elements.progressText.textContent = "Done";
   } else if (state === "installing") {
-    elements.title.textContent = "Restarting to update";
+    elements.title.textContent = "Installing update.";
     elements.description.textContent =
-      "Repostify will close and reopen automatically. Windows may take a few minutes to finish installing it.";
+      "Repostify will close and reopen automatically. Your settings and TikTok connection stay in place.";
+    setProgress(1);
+    elements.progressBytes.textContent = "Ready to restart";
+    elements.progressText.textContent = "100%";
   } else if (state === "error") {
-    elements.title.textContent = "Update didn’t finish";
+    elements.title.textContent = "Update did not finish.";
     elements.description.textContent =
       "Nothing was replaced. Check your connection and try the download again.";
     elements.error.textContent = detail.message || "Unknown update error.";

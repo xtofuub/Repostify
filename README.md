@@ -1,238 +1,189 @@
 <h1 align="center">Repostify</h1>
 
 <p align="center">
-  <strong>See every TikTok repost on any public profile.</strong><br/>
-  No login required. No API key. No notification to the account you're checking.
+  <strong>Browse visible TikTok reposts in one clean Windows app.</strong><br />
+  Scan a profile, filter the feed, compare creators, and play videos without leaving the app.
 </p>
 
 <p align="center">
-  <img src=".github/assets/01-home.png" alt="Repostify landing page" width="900" />
+  <a href="https://github.com/xtofuub/Repostify/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/xtofuub/Repostify?style=flat-square&color=111111" /></a>
+  <a href="https://github.com/xtofuub/Repostify/releases/latest"><img alt="Windows x64" src="https://img.shields.io/badge/Windows-x64-111111?style=flat-square" /></a>
+  <a href="./LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-111111?style=flat-square" /></a>
 </p>
 
----
+<p align="center">
+  <img src=".github/assets/01-home.png" alt="Repostify home screen" width="920" />
+</p>
 
-## What it does
+## Download
 
-Paste any public TikTok handle → Repostify walks the reposts tab and lays every repost out as a playable grid with stats, top-amplified creators, and one-click video or photo-slideshow playback. Connecting TikTok is optional and is used only when a profile requires an approved viewer.
+Open the [latest release](https://github.com/xtofuub/Repostify/releases/latest) and choose:
 
-The reposts tab is where someone's taste actually lives. Likes are noise. Posts are performance. Reposts are what they wanted their followers to see. This tool flattens that feed into a single page you can scan in seconds.
+- **Setup EXE**: installs Repostify, adds an uninstaller, and supports automatic in-place updates.
+- **Portable EXE**: runs without installation and updates the same portable file in place.
+
+Windows 10 or 11 x64 is required. Repostify is not code-signed yet, so Windows may show a SmartScreen warning for a new release.
+The Portable build unpacks itself on launch, so its first start is slower than the installed build.
+
+## What Repostify gives you
+
+- **Complete scan view**: profile details, aggregate engagement, top amplified creators, tags, timeline, and a filterable repost grid.
+- **TikTok-native playback**: the TikTok player is used first. A built-in direct player is available when the embed fails.
+- **Video details**: creator, caption, exact original publish date, duration, engagement rate, counts, and position in the repost feed.
+- **Fast navigation**: use Previous / Next, arrow keys, <code>j</code> / <code>k</code>, or the mouse wheel.
+- **Photo posts with music**: slideshows advance in-app and play the attached TikTok track when TikTok provides it.
+- **Connected TikTok access**: optionally connect an account for profiles that TikTok Web allows that account to view.
+- **Short local cache**: successful scans are saved as plain JSON for 15 minutes. Repeat scans load instantly, and **Scan fresh** bypasses the cache.
+- **Desktop settings**: check the version, update the app, manage TikTok access, clear cache, and open diagnostics.
+- **Verified updates**: Setup and Portable downloads are matched to the build type and verified against GitHub's SHA-256 digest before they run.
 
 ## Screenshots
 
-### Result page
+### Profile results
 
-Per-profile view: header, full stats row, top-creators leaderboard, repost grid.
-
-<p align="center">
-  <img src=".github/assets/03-result.png" alt="Result page for @khaby.lame" width="900" />
-</p>
-
-### Top creators ranking
-
-Counts how many times each original creator appears in the feed, ranked.
+Profile summary, total engagement, timeline, creators, hashtags, and the repost reel live on one page.
 
 <p align="center">
-  <img src=".github/assets/05-top-creators.png" alt="Top amplified creators" width="900" />
+  <img src=".github/assets/03-result.png" alt="Repostify results for @zachking" width="920" />
 </p>
 
-### Inline player
+### Top amplified creators
 
-Click any cover → full-screen overlay with direct video playback + caption, stats, and author details. If a direct stream expires, the player falls back to TikTok's embed.
+Repostify counts how often each original creator appears and ranks the most amplified accounts.
 
 <p align="center">
-  <img src=".github/assets/07-player.png" alt="Inline TikTok player" width="900" />
+  <img src=".github/assets/05-top-creators.png" alt="Top creators ranking" width="920" />
 </p>
 
-### Mobile
+### Player and video details
+
+The default is TikTok's player. If TikTok reports that a video is unavailable, switch to the direct fallback without leaving the panel.
 
 <p align="center">
-  <img src=".github/assets/08-mobile.png" alt="Mobile view" width="320" />
+  <img src=".github/assets/07-player.png" alt="Repostify video player and detail panel" width="920" />
 </p>
 
----
+### Settings
 
-## Features
+<p align="center">
+  <img src=".github/assets/08-settings.png" alt="Repostify desktop settings" width="920" />
+</p>
 
-- **Profile overview** — Avatar, bio, follower / following / hearts pulled from the public page rehydration script.
-- **Repost grid** — 9:16 cover thumbnails with duration badge, original creator handle, play overlay, and per-video engagement stats.
-- **Inline player** — TikTok video embed or native photo slideshow with its original music, plus a detail panel. Scroll wheel, arrow keys, j/k, or the compact buttons to navigate.
-- **Smart session fallback** — Uses a connected TikTok session when needed, but automatically retries public profiles anonymously when TikTok blocks the connected identity.
-- **Aggregate stats** — Total plays, likes, comments, shares, and unique creators across the captured batch.
-- **Top creators leaderboard** — Frequency-ranked list of every original creator with horizontal bar chart.
-- **Caption filter** — Type a word (`fyp`, `lol`, `edit`) to filter the grid live. Toggle between fuzzy substring and exact-word match. Top extracted hashtags suggested.
-- **Fetch-limit selector** — Hidden in a popover behind the search bar gear: 30 / 60 / 120 / 250 / All.
-- **Bot-detection bypass** — Uses [cloakbrowser](https://github.com/CloakHQ/CloakBrowser) (stealth Chromium with source-level C++ fingerprint patches) instead of stock Playwright, so TikTok serves the full repost feed instead of cutting off at the captcha gate.
-- **Direct-cursor pagination** — After the first XHR fires, subsequent pages are fetched via the captured URL template, not by scrolling. Roughly 35% faster on big feeds.
-- **Image proxy** — TikTok blocks hotlinks; all thumbnails route through `/api/img` with the Referer header set.
-- **SEO** — Dynamic per-handle metadata, JSON-LD (`WebApplication`, `FAQPage`, `BreadcrumbList`, `Article`), sitemap with curated popular handles, `robots.txt`.
+### In-app updates
 
-- **Fast local scan cache** — Successful scans are stored as plain JSON for 15 minutes. Repeat the same handle and fetch limit for an instant result, use **Scan fresh** to bypass it, or clear everything from Settings.
-- **Desktop settings** — See the installed version and build type, check for updates, manage the TikTok connection, inspect or clear cache usage, and open the local diagnostics folder.
+<p align="center">
+  <img src=".github/assets/09-update.png" alt="Repostify update window" width="500" />
+</p>
 
-## How the scraper works
+## How scanning works
 
-1. Cloakbrowser launches a stealth Chromium with source-level fingerprint patches.
-2. Navigates to `https://www.tiktok.com/@<handle>`.
-3. Dismisses the cookie banner via shadow-DOM traversal.
-4. Parses `__UNIVERSAL_DATA_FOR_REHYDRATION__` for profile + initial repost list.
-5. Finds the Reposts tab by `role="tab"` text match, clicks it.
-6. Captures the first `/api/repost/item_list/` XHR as a URL template.
-7. Paginates: each subsequent call hits the same URL with an updated cursor via `page.evaluate(fetch)` (TikTok's own fetch interceptor signs the request).
-8. Detects captcha, private-tab, and TikTok business-status errors. If a connected identity is blocked from a public profile, retries anonymously.
-9. Normalizes, dedupes, sorts by recency.
+1. Repostify launches [cloakbrowser](https://github.com/CloakHQ/CloakBrowser), a patched Chromium build.
+2. It opens <code>tiktok.com/@handle</code> using either an anonymous session or the optional connected TikTok session.
+3. It opens the Reposts tab and captures TikTok's own repost-list request.
+4. It follows the captured cursor until the chosen limit is reached.
+5. Results are normalized, deduplicated, and returned to the local app.
 
-Login is optional. The data is limited to what TikTok Web returns to the anonymous or connected browser session.
+No third-party repost API is involved. Repostify can only show cards that TikTok Web returns to the active browser session.
 
-## Tech stack
+## Privacy and local data
 
-| Layer            | Choice                                                                                       |
-| ---------------- | -------------------------------------------------------------------------------------------- |
-| Framework        | [Next.js](https://nextjs.org) 16.2.10 (App Router, Turbopack, React Compiler)                |
-| Runtime          | React 19                                                                                     |
-| Styling          | Tailwind CSS v4 with `@theme inline`                                                         |
-| Components       | shadcn/ui                                                                                    |
-| Animation        | motion (Framer Motion v12)                                                                   |
-| Scraping         | [cloakbrowser](https://github.com/CloakHQ/CloakBrowser) (stealth Chromium, Playwright API)   |
-| Icons            | lucide-react                                                                                 |
-| Fonts            | Inter + Instrument Serif (via `next/font`)                                                   |
-| Language         | TypeScript 5                                                                                 |
-| Package manager  | pnpm                                                                                         |
+- Repostify has no user-account system and no SQLite database.
+- A connected TikTok session stays on the device in Repostify's app-data folder.
+- Successful scans use a 15-minute JSON cache. Clear it anytime from **Settings > Scan cache**.
+- Logs and diagnostics stay local unless you choose to share them.
+- Repostify is read-only. It does not follow, like, repost, comment, or message anyone.
 
-## Getting started
+## Limits
 
-```bash
-pnpm install
-pnpm dev
-```
+- **Private and audience-controlled profiles**: connecting TikTok helps only when TikTok Web exposes the profile to that signed-in account. TikTok may still return access code <code>10222</code> even when the mobile app can view it.
+- **Hidden repost tabs**: Repostify cannot read a tab TikTok does not render.
+- **Rate limits and captchas**: TikTok can temporarily return an empty list or block a scan. Waiting before retrying usually helps.
+- **Repost date**: TikTok normally exposes the original video's publish date, not the exact time another account reposted it. Feed order remains the reliable repost-recency signal.
+- **Large feeds**: hundreds of reposts can take several minutes because TikTok is the bottleneck.
 
-First use downloads the cloakbrowser binary (several hundred MB, cached in `~/.cloakbrowser/`).
+## Run from source
 
-Open [http://localhost:3000](http://localhost:3000). Paste a handle, pick a fetch limit, hit Analyze.
+Requirements: Git, Node.js 20.9 or newer, and pnpm.
 
-### Production build
-
-```bash
-pnpm build
-pnpm start
-```
-
-### Windows desktop app
-
-Requirements: Windows 10/11 x64, Git, Node.js 20.9 or newer, and pnpm.
-
-Clone and install dependencies:
-
-```bash
+~~~bash
 git clone https://github.com/xtofuub/Repostify.git
 cd Repostify
 corepack enable
 pnpm install --frozen-lockfile
-```
+pnpm dev
+~~~
 
-Build the Windows installer from source:
+Open [http://localhost:3000](http://localhost:3000).
 
-```bash
+The first scan downloads cloakbrowser to <code>~/.cloakbrowser/</code>. The browser download is several hundred MB and is reused afterward.
+
+### Production web build
+
+~~~bash
+pnpm build
+pnpm start
+~~~
+
+Repostify needs a persistent Node.js host that can launch Chromium. A standard serverless Vercel deployment is not suitable for the scraper.
+
+## Build the Windows EXEs
+
+Install dependencies first, then run:
+
+~~~bash
+# Windows installer
 pnpm desktop:build
-```
 
-Build the no-install portable EXE from source:
-
-```bash
+# No-install portable build
 node desktop/build.cjs --portable
-```
+~~~
 
-The files are written to:
+Artifacts are written to:
 
-- `release/Repostify-<version>-Windows-x64-Setup.exe`
-- `release/Repostify-<version>-Windows-x64-Portable.exe`
+~~~text
+release/Repostify-<version>-Windows-x64-Setup.exe
+release/Repostify-<version>-Windows-x64-Portable.exe
+~~~
 
-It runs the Next.js server locally, opens it in a hardened Electron window, and
-stores session data, short-lived JSON scan cache, and logs under the current
-Windows user's app-data folder. The Settings page can clear scan cache without
-touching the TikTok connection.
-The packaged app checks the GitHub Releases page when it starts. When a newer
-version exists, the in-app update window shows the download and verification
-progress. Choose **Update now** and leave the window open. The installed build
-closes, installs silently, and reopens on the new version automatically; Windows
-can take a few minutes to unpack it. The portable build replaces the original
-portable EXE in place and then reopens it, so an old shortcut cannot start the
-previous version again. Every download is verified against GitHub's SHA-256
-digest before it is allowed to run.
+The desktop build packages the Next.js runtime, Electron shell, cloakbrowser integration, icons, settings, updater, and uninstall metadata.
 
-You can also open **Settings → App → Check for updates** at any time. The same
-verified updater window is used for both automatic and manual checks.
+## Uninstall
 
-### Debug mode
+- **Setup build**: open **Windows Settings > Apps > Installed apps > Repostify > Uninstall**.
+- **Portable build**: close Repostify and delete the Portable EXE.
 
-```bash
-DEBUG_TIKTOK=1 pnpm dev
-```
-
-Dumps the raw first XHR response, full page HTML, and a viewport screenshot into `.debug/` for each scrape.
+Local settings and TikTok session data are kept separately in the Windows app-data folder. Open **Settings > Diagnostics** before uninstalling if you also want to locate and remove that folder.
 
 ## API
 
-```
+~~~http
 GET /api/reposts?username=<handle>&limit=<n>&refresh=<0|1>
-```
+~~~
 
-| Param      | Notes                                                |
-| ---------- | ---------------------------------------------------- |
-| `username` | Required. TikTok handle without `@`.                 |
-| `limit`    | Optional integer. Omit or `0` = no cap. Max 5000.    |
-| `refresh`  | Optional. `1` bypasses the 15-minute local scan cache. |
+| Parameter | Description |
+| --- | --- |
+| <code>username</code> | TikTok handle without <code>@</code>. Required. |
+| <code>limit</code> | Repost cap. Omit or use <code>0</code> for no cap. Maximum 5000. |
+| <code>refresh</code> | Use <code>1</code> to bypass the 15-minute local cache. |
 
-Returns:
+## Project map
 
-```ts
-{
-  username: string;
-  profile: { nickname, avatar, verified, bio, followers, following, likes } | null;
-  reposts: Repost[];
-  hasMore: boolean;
-  captchaSuspected: boolean;
-  fetchedAt: number;
-}
-```
+~~~text
+src/app/                    Next.js pages and route handlers
+src/app/api/reposts/        Repost scraper endpoint
+src/app/api/img/            TikTok image proxy
+src/app/api/video/          Direct media fallback
+src/components/             Search, cards, player, settings, UI
+src/lib/tiktok.ts           Scraper, pagination, session handling
+src/lib/repost-cache.ts     Short-lived local JSON cache
+desktop/                    Electron shell, updater, packaging
+scripts/                    Login, smoke checks, screenshots
+~~~
 
-## Project layout
+## Tech stack
 
-```
-src/
-├── app/
-│   ├── page.tsx              # Home: hero + search + FAQ + CTA
-│   ├── u/[username]/         # Per-handle result page (auto-scrapes on load)
-│   ├── about/, guide/, privacy/
-│   ├── api/
-│   │   ├── reposts/          # GET /api/reposts (the scraper endpoint)
-│   │   ├── img/              # Image proxy (24 h cache, domain-whitelisted)
-│   │   └── video/            # Video proxy fallback (mostly unused)
-│   ├── sitemap.ts            # Static routes + popular handles
-│   └── robots.ts             # Disallows /api/
-├── components/
-│   ├── repost-search.tsx     # Main client component: state machine + UI
-│   ├── repost-card.tsx       # Thumbnail card
-│   ├── repost-player.tsx     # Full-screen overlay player
-│   ├── brand.tsx             # LogoMark, PrimaryButton, GuideLines, BackgroundVideo
-│   └── ui/                   # shadcn primitives
-├── lib/
-│   ├── tiktok.ts             # Scraper core (~700 lines)
-│   ├── seo.ts                # Site constants + popular-handle list
-│   ├── format.ts             # Number / time formatters
-│   └── utils.ts              # cn()
-└── instrumentation.ts        # Next.js boot hook: pre-warms cloakbrowser
-```
-
-## Limitations
-
-- **Connected private profiles** — TikTok Web can return access code `10222` even for an approved account. Repostify cannot scrape cards the web page never renders.
-
-- **Private reposts tabs** — Many accounts hide it. That's a TikTok setting; can't bypass without auth.
-- **Repost timestamps** — TikTok's anonymous endpoint exposes only the original video's createTime, not when the user reposted it. Order in the feed (most-recent-first) is the only repost-recency signal.
-- **Big feeds are slow** — 500+ items can take 2-3 min. TikTok server is the bottleneck. Pick a smaller fetch limit if you only need the recent.
-- **Read-only** — No write ops, no logged-in sessions, no DM-anyone weirdness.
-- **Vercel won't run this** — Needs persistent server (cloakbrowser binary launch). Render, Fly, Railway, VPS all work.
+Next.js 16, React 19, TypeScript, Tailwind CSS v4, Electron, motion, Playwright, and [cloakbrowser](https://github.com/CloakHQ/CloakBrowser).
 
 ## License
 
-MIT. Not affiliated with or endorsed by TikTok or ByteDance.
+MIT. Repostify is not affiliated with or endorsed by TikTok or ByteDance.

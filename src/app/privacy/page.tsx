@@ -83,9 +83,9 @@ export default function PrivacyPage() {
               Third parties
             </h2>
             <p>
-              Video playback prefers a short-lived TikTok media URL proxied
-              through the local app. If that stream is unavailable, playback
-              falls back to TikTok&apos;s embed iframe and its availability rules.
+              Video playback uses TikTok&apos;s embed iframe by default. The
+              optional fallback player uses a short-lived TikTok media URL
+              proxied through the local app.
               We have no access to anything inside the cross-origin iframe.
             </p>
 

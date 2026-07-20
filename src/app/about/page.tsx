@@ -90,8 +90,8 @@ export default function AboutPage() {
             <p>
               Images and thumbnails are hot-link protected on TikTok&apos;s
               CDN, so they are streamed through a server-side proxy that
-              sets the right Referer header. Video playback prefers a direct
-              proxied stream, with TikTok&apos;s public embed player as a fallback.
+              sets the right Referer header. Video playback uses TikTok&apos;s
+              native embed first, with a direct local fallback when needed.
             </p>
             <h2 className="font-display text-[clamp(1.6rem,3vw,2.2rem)] leading-[1.05] tracking-[-0.015em] pt-6 text-white">
               What it does not do
