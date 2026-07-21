@@ -12,168 +12,206 @@
     <style>
       :root {
         color-scheme: dark;
-        font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
-        background: #080809;
-        color: #f7f7f8;
+        font-family: Inter, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+        min-height: 100%;
+        background: #0d0d0f;
+        color: #f8f8f9;
       }
       * { box-sizing: border-box; }
       body {
-        min-height: 100vh;
-        margin: 0;
+        width: min(100%, 500px);
+        min-height: min(100vh, 500px);
+        margin: 0 auto;
         overflow: hidden;
-        background: #080809;
+        background: #151518;
       }
       button { font: inherit; }
       .titlebar {
-        height: 42px;
+        height: 44px;
         display: flex;
         align-items: center;
         padding: 0 138px 0 18px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-        color: rgba(255, 255, 255, 0.58);
+        border-bottom: 1px solid #2a2a2f;
+        color: rgba(255, 255, 255, 0.68);
         font-size: 12px;
         font-weight: 600;
-        letter-spacing: 0.01em;
         -webkit-app-region: drag;
         user-select: none;
       }
-      .titlebar-brand {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
+      .titlebar-brand { display: flex; align-items: center; gap: 9px; }
       .mini-mark {
-        width: 19px;
-        height: 19px;
+        position: relative;
+        width: 21px;
+        height: 21px;
         display: grid;
         place-items: center;
-        border: 1px solid rgba(255, 255, 255, 0.12);
+        border: 1px solid #35353b;
         border-radius: 6px;
-        background: rgba(255, 255, 255, 0.035);
+        background: #1d1d21;
         color: #fff;
-        font: italic 14px/1 Georgia, "Times New Roman", serif;
+        font: italic 15px/1 Georgia, "Times New Roman", serif;
+      }
+      .mini-mark::after {
+        content: "";
+        position: absolute;
+        right: 3px;
+        bottom: 3px;
+        width: 3px;
+        height: 3px;
+        background: #25f4ee;
       }
       main {
-        min-height: calc(100vh - 42px);
-        padding: 26px 30px 28px;
+        min-height: calc(min(100vh, 500px) - 44px);
+        padding: 27px 30px 28px;
         display: flex;
         flex-direction: column;
       }
       .topline {
         display: flex;
-        align-items: flex-start;
+        align-items: center;
         justify-content: space-between;
-        gap: 18px;
+        gap: 16px;
       }
-      .eyebrow {
-        color: rgba(255, 255, 255, 0.42);
-        font-size: 10px;
-        font-weight: 650;
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
+      .status-mark {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        color: rgba(255, 255, 255, 0.84);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .status-icon {
+        width: 34px;
+        height: 34px;
+        display: grid;
+        place-items: center;
+        border-radius: 10px;
+        background: #fff;
+        color: #111113;
+        font-size: 17px;
+        font-weight: 700;
       }
       .meta {
-        color: rgba(255, 255, 255, 0.38);
-        font: 11px/1.2 ui-monospace, "Cascadia Mono", Consolas, monospace;
-        text-align: right;
+        padding: 6px 9px;
+        border: 1px solid #34343a;
+        border-radius: 999px;
+        color: rgba(255, 255, 255, 0.52);
+        background: #1c1c20;
+        font-size: 10.5px;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
       }
       h1 {
-        margin: 24px 0 9px;
-        max-width: 18ch;
+        margin: 22px 0 8px;
+        max-width: 19ch;
         color: #fff;
-        font: 400 34px/1.04 Georgia, "Times New Roman", serif;
-        letter-spacing: -0.035em;
+        font: 400 33px/1.05 "Instrument Serif", Georgia, "Times New Roman", serif;
+        letter-spacing: -0.025em;
         text-wrap: balance;
       }
       .description {
         min-height: 43px;
         margin: 0;
-        max-width: 48ch;
-        color: rgba(255, 255, 255, 0.62);
-        font-size: 13px;
+        max-width: 52ch;
+        color: rgba(255, 255, 255, 0.68);
+        font-size: 13.5px;
         line-height: 1.55;
         text-wrap: pretty;
       }
       .version-card {
-        margin-top: 24px;
+        margin-top: 22px;
         display: grid;
-        grid-template-columns: 1fr 42px 1fr;
+        grid-template-columns: 1fr 44px 1fr;
         align-items: stretch;
         overflow: hidden;
-        border: 1px solid rgba(255, 255, 255, 0.10);
-        border-radius: 14px;
-        background: rgba(255, 255, 255, 0.025);
+        border: 1px solid #333339;
+        border-radius: 12px;
+        background: #1d1d21;
       }
-      .version {
-        padding: 15px 16px 14px;
-      }
+      .version { padding: 15px 16px 14px; }
       .version-label {
         display: block;
         margin-bottom: 7px;
-        color: rgba(255, 255, 255, 0.34);
-        font-size: 9px;
-        font-weight: 650;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.45);
+        font-size: 10px;
+        font-weight: 600;
       }
       .version strong {
         color: #fff;
-        font: 600 15px/1 ui-monospace, "Cascadia Mono", Consolas, monospace;
+        font-size: 15px;
+        font-weight: 650;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
       }
       .version-arrow {
         display: grid;
         place-items: center;
-        border-left: 1px solid rgba(255, 255, 255, 0.08);
-        border-right: 1px solid rgba(255, 255, 255, 0.08);
-        color: rgba(255, 255, 255, 0.36);
-        font-size: 15px;
+        border-left: 1px solid #303035;
+        border-right: 1px solid #303035;
+        color: rgba(255, 255, 255, 0.5);
+        font-size: 16px;
       }
       .assurances {
-        margin-top: 14px;
+        margin-top: 15px;
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 8px;
+        gap: 14px;
       }
       .assurance {
-        padding: 10px 12px;
-        border: 1px solid rgba(255, 255, 255, 0.07);
-        border-radius: 11px;
-        background: rgba(255, 255, 255, 0.015);
+        position: relative;
+        padding-left: 22px;
+      }
+      .assurance::before {
+        content: "✓";
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 15px;
+        height: 15px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: rgba(37, 244, 238, 0.12);
+        color: #25f4ee;
+        font-size: 9px;
+        font-weight: 800;
       }
       .assurance strong {
         display: block;
-        color: rgba(255, 255, 255, 0.78);
+        color: rgba(255, 255, 255, 0.82);
         font-size: 11px;
         font-weight: 600;
       }
       .assurance span {
         display: block;
         margin-top: 3px;
-        color: rgba(255, 255, 255, 0.34);
+        color: rgba(255, 255, 255, 0.43);
         font-size: 10px;
+        line-height: 1.35;
       }
       .progress-wrap {
         display: none;
-        margin-top: 24px;
-        padding: 16px;
-        border: 1px solid rgba(255, 255, 255, 0.10);
-        border-radius: 14px;
-        background: rgba(255, 255, 255, 0.025);
+        margin-top: 22px;
+        padding: 17px;
+        border: 1px solid #333339;
+        border-radius: 12px;
+        background: #1d1d21;
       }
       .progress-labels {
         display: flex;
         justify-content: space-between;
         gap: 12px;
-        margin-bottom: 11px;
-        color: rgba(255, 255, 255, 0.52);
+        margin-bottom: 12px;
+        color: rgba(255, 255, 255, 0.58);
         font-size: 11px;
+        font-variant-numeric: tabular-nums;
       }
       .progress {
         --progress: 0;
-        height: 5px;
+        height: 6px;
         overflow: hidden;
         border-radius: 999px;
-        background: rgba(255, 255, 255, 0.10);
+        background: #303036;
       }
       .progress::after {
         content: "";
@@ -181,7 +219,7 @@
         width: 100%;
         height: 100%;
         border-radius: inherit;
-        background: #f7f7f8;
+        background: #fff;
         transform: scaleX(var(--progress));
         transform-origin: left center;
         transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -190,40 +228,41 @@
         display: none;
         margin-top: 18px;
         padding: 12px 13px;
-        border: 1px solid rgba(255, 113, 134, 0.20);
-        border-radius: 11px;
-        background: rgba(255, 71, 101, 0.08);
-        color: #ffb7c2;
-        font: 11px/1.5 ui-monospace, "Cascadia Mono", Consolas, monospace;
+        border: 1px solid rgba(255, 113, 134, 0.3);
+        border-radius: 10px;
+        background: rgba(255, 71, 101, 0.1);
+        color: #ffc1ca;
+        font-size: 11px;
+        line-height: 1.5;
         overflow-wrap: anywhere;
       }
       .actions {
         margin-top: auto;
         display: grid;
-        grid-template-columns: 1fr 1fr;
-        overflow: hidden;
-        border: 1px solid rgba(255, 255, 255, 0.14);
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.025);
+        grid-template-columns: 1fr 1.25fr;
+        gap: 10px;
       }
       .button {
-        height: 46px;
+        height: 45px;
         padding: 0 18px;
-        border: 0;
-        background: transparent;
-        color: rgba(255, 255, 255, 0.64);
-        font-size: 11px;
-        font-weight: 650;
-        letter-spacing: 0.13em;
-        text-transform: uppercase;
+        border: 1px solid #37373d;
+        border-radius: 9px;
+        background: #1d1d21;
+        color: rgba(255, 255, 255, 0.74);
+        font-size: 12.5px;
+        font-weight: 600;
         cursor: pointer;
-        transition: background-color 150ms ease, color 150ms ease;
+        transition: background-color 150ms ease, border-color 150ms ease, transform 100ms ease;
       }
-      .button + .button { border-left: 1px solid rgba(255, 255, 255, 0.14); }
-      .button:hover { background: rgba(255, 255, 255, 0.065); color: #fff; }
-      .button:active { background: rgba(255, 255, 255, 0.10); }
-      .button:focus-visible { outline: 2px solid #fff; outline-offset: -3px; }
-      .button-primary { color: #fff; }
+      .button:hover { background: #242429; border-color: #46464d; color: #fff; }
+      .button:active { transform: scale(0.985); }
+      .button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+      .button-primary {
+        border-color: #fff;
+        background: #fff;
+        color: #111113;
+      }
+      .button-primary:hover { border-color: #ededee; background: #ededee; color: #111113; }
       [data-state="downloading"] .version-card,
       [data-state="downloading"] .assurances,
       [data-state="verifying"] .version-card,
@@ -241,7 +280,7 @@
       [data-state="error"] .error { display: block; }
       [data-state="error"] [data-action="update"]::after { content: "Try again"; }
       [data-state="error"] [data-action="update"] { font-size: 0; }
-      [data-state="error"] [data-action="update"]::after { font-size: 11px; }
+      [data-state="error"] [data-action="update"]::after { font-size: 12.5px; }
       @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after { transition-duration: 0.01ms !important; }
       }
@@ -249,39 +288,45 @@
   </head>
   <body data-state="available">
     <div class="titlebar">
-      <div class="titlebar-brand"><span class="mini-mark" aria-hidden="true">R</span>Repostify</div>
+      <div class="titlebar-brand">
+        <span class="mini-mark" aria-hidden="true">R</span>
+        Repostify
+      </div>
     </div>
     <main>
       <div class="topline">
-        <div class="eyebrow">Desktop update</div>
+        <div class="status-mark">
+          <span class="status-icon" aria-hidden="true">↑</span>
+          Update available
+        </div>
         <div class="meta" data-update-meta>Windows x64</div>
       </div>
 
       <h1 data-title>A new version is ready.</h1>
       <p class="description" data-description>
-        Download the verified build, install it quietly, and reopen Repostify automatically.
+        Update Repostify, then pick up exactly where you left off.
       </p>
 
       <section class="version-card" aria-label="Version change">
         <div class="version">
-          <span class="version-label">Installed</span>
+          <span class="version-label">Installed version</span>
           <strong data-current-version>current</strong>
         </div>
-        <div class="version-arrow" aria-hidden="true">&rarr;</div>
+        <div class="version-arrow" aria-hidden="true">→</div>
         <div class="version">
-          <span class="version-label">Available</span>
+          <span class="version-label">New version</span>
           <strong data-latest-version>latest</strong>
         </div>
       </section>
 
       <div class="assurances">
         <div class="assurance">
-          <strong>Verified download</strong>
-          <span>SHA-256 checked before install</span>
+          <strong>Verified before install</strong>
+          <span>SHA-256 checked after download</span>
         </div>
         <div class="assurance">
-          <strong>Your settings stay</strong>
-          <span>TikTok connection is untouched</span>
+          <strong>Your settings stay put</strong>
+          <span>TikTok connection remains untouched</span>
         </div>
       </div>
 
@@ -304,8 +349,8 @@
       <div class="error" data-error role="alert"></div>
 
       <div class="actions" data-actions>
-        <button class="button button-secondary" type="button" data-action="later">Not now</button>
-        <button class="button button-primary" type="button" data-action="update">Update now</button>
+        <button class="button" type="button" data-action="later">Not now</button>
+        <button class="button button-primary" type="button" data-action="update">Update Repostify</button>
       </div>
     </main>
     <script src="update-renderer.js"></script>

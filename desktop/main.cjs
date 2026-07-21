@@ -252,11 +252,11 @@ function appendUpdateLog(message) {
 function createUpdateWindow({ currentVersion, latestVersion, asset }) {
   const window = new BrowserWindow({
     width: 500,
-    height: 452,
+    height: 500,
     minWidth: 500,
-    minHeight: 452,
+    minHeight: 500,
     maxWidth: 500,
-    maxHeight: 452,
+    maxHeight: 500,
     parent: mainWindow,
     modal: true,
     show: false,

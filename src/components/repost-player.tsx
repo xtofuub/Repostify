@@ -146,6 +146,21 @@ export function RepostPlayer({
     return () => window.clearInterval(id);
   }, [imageUrls.length, isPhoto, repostId]);
 
+  const changePhoto = useCallback(
+    (direction: -1 | 1) => {
+      if (!repostId || imageUrls.length < 2) return;
+      setPhotoState((current) => {
+        const currentIndex = current.repostId === repostId ? current.index : 0;
+        return {
+          repostId,
+          index:
+            (currentIndex + direction + imageUrls.length) % imageUrls.length,
+        };
+      });
+    },
+    [imageUrls.length, repostId],
+  );
+
   // Belt-and-suspenders: also try unmuting on a short delay after load, in
   // case the player never fires onPlayerReady but is still accepting messages.
   useEffect(() => {
@@ -176,11 +191,23 @@ export function RepostPlayer({
     if (!repostId) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") closePlayer();
-      if (e.key === "ArrowDown" || e.key === "ArrowRight" || e.key === "j") {
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        if (isPhoto && imageUrls.length > 1) changePhoto(1);
+        else goNext();
+        return;
+      }
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        if (isPhoto && imageUrls.length > 1) changePhoto(-1);
+        else goPrev();
+        return;
+      }
+      if (e.key === "ArrowDown" || e.key === "j") {
         e.preventDefault();
         goNext();
       }
-      if (e.key === "ArrowUp" || e.key === "ArrowLeft" || e.key === "k") {
+      if (e.key === "ArrowUp" || e.key === "k") {
         e.preventDefault();
         goPrev();
       }
@@ -192,7 +219,7 @@ export function RepostPlayer({
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = prev;
     };
-  }, [closePlayer, goNext, goPrev, repostId]);
+  }, [changePhoto, closePlayer, goNext, goPrev, imageUrls.length, isPhoto, repostId]);
 
   function onWheel(e: React.WheelEvent) {
     const now = Date.now();
@@ -232,25 +259,10 @@ export function RepostPlayer({
           >
             <div className="relative bg-black rounded-2xl overflow-hidden flex items-center justify-center w-[min(48vh,calc(88vh*9/16))] aspect-[9/16] max-h-[88vh]">
               {isPhoto ? (
-                <button
-                  type="button"
-                  className="relative h-full w-full cursor-pointer overflow-hidden bg-black"
-                  onClick={() =>
-                    setPhotoState((current) => ({
-                      repostId: repostId ?? "",
-                      index:
-                        imageUrls.length > 1
-                          ? ((current.repostId === repostId
-                              ? current.index
-                              : 0) +
-                              1) %
-                            imageUrls.length
-                          : 0,
-                    }))
-                  }
-                  aria-label={
-                    imageUrls.length > 1 ? "Show next photo" : "Photo post"
-                  }
+                <div
+                  className="relative h-full w-full overflow-hidden bg-black"
+                  role="group"
+                  aria-label={`Photo post by @${repost.author.uniqueId}`}
                 >
                   <motion.img
                     key={`${repost.id}-photo-${photoIndex}`}
@@ -263,9 +275,27 @@ export function RepostPlayer({
                     referrerPolicy="no-referrer"
                   />
                   {imageUrls.length > 1 && (
-                    <span className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-white/15 bg-black/60 px-2.5 py-1 text-[10px] tracking-[0.16em] text-white/75 backdrop-blur-md tnum">
-                      {photoIndex + 1} / {imageUrls.length}
-                    </span>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => changePhoto(-1)}
+                        aria-label="Previous photo"
+                        className="absolute left-3 top-1/2 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/65 text-white/85 transition-[background-color,transform] hover:bg-black/85 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => changePhoto(1)}
+                        aria-label="Next photo"
+                        className="absolute right-3 top-1/2 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/65 text-white/85 transition-[background-color,transform] hover:bg-black/85 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                      >
+                        <ArrowRight className="h-4 w-4" />
+                      </button>
+                      <span className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-white/15 bg-black/60 px-2.5 py-1 text-[10px] tracking-[0.16em] text-white/75 backdrop-blur-md tnum">
+                        {photoIndex + 1} / {imageUrls.length}
+                      </span>
+                    </>
                   )}
                   {photoMusicUrl && (
                     <audio
@@ -277,7 +307,7 @@ export function RepostPlayer({
                       preload="auto"
                     />
                   )}
-                </button>
+                </div>
               ) : repost.id && directPlayerId !== repost.id ? (
                 <iframe
                   ref={iframeRef}

@@ -15,7 +15,7 @@ import { DATA_DIR } from "@/lib/data-dir";
 import type { ScrapeResult } from "@/lib/tiktok";
 
 const CACHE_SCHEMA = 1;
-export const REPOST_CACHE_TTL_MS = 15 * 60_000;
+export const REPOST_CACHE_TTL_MS = 24 * 60 * 60_000;
 
 type CacheEntry = {
   schema: typeof CACHE_SCHEMA;

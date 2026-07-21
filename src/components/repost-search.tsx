@@ -15,6 +15,8 @@ import {
   BadgeCheck,
   CalendarRange,
   Check,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Database,
   Eye,
@@ -90,6 +92,39 @@ type SortKey =
   | "duration"
   | "newest"
   | "oldest";
+
+type AdvancedFilters = {
+  creator: string;
+  dateFrom: string;
+  dateTo: string;
+  minViews: string;
+  maxViews: string;
+  minLikes: string;
+  maxLikes: string;
+};
+
+const EMPTY_ADVANCED_FILTERS: AdvancedFilters = {
+  creator: "",
+  dateFrom: "",
+  dateTo: "",
+  minViews: "",
+  maxViews: "",
+  minLikes: "",
+  maxLikes: "",
+};
+
+function numericFilter(value: string): number | null {
+  if (!value.trim()) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function dateBoundary(value: string, endOfDay = false): number | null {
+  if (!value) return null;
+  const time = new Date(`${value}T00:00:00`).getTime();
+  if (!Number.isFinite(time)) return null;
+  return Math.floor(time / 1000) + (endOfDay ? 86_399 : 0);
+}
 
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: "feed", label: "Newest reposted" },
@@ -570,6 +605,9 @@ function Results({
   const [keywords, setKeywords] = useState<string[]>([]);
   const [draft, setDraft] = useState("");
   const [exact, setExact] = useState(false);
+  const [advanced, setAdvanced] = useState<AdvancedFilters>(
+    EMPTY_ADVANCED_FILTERS,
+  );
 
   // Stamp each repost with its canonical feed index (0 = newest reposted) so
   // observed-timing and position survive client-side sorting and filtering.
@@ -605,7 +643,16 @@ function Results({
     const liveDraft = draft.trim().toLowerCase();
     const lc = keywords.map((k) => k.toLowerCase());
     const all = liveDraft ? [...lc, liveDraft] : lc;
-    if (all.length === 0) {
+    const creator = advanced.creator.trim().replace(/^@/, "").toLowerCase();
+    const from = dateBoundary(advanced.dateFrom);
+    const to = dateBoundary(advanced.dateTo, true);
+    const minViews = numericFilter(advanced.minViews);
+    const maxViews = numericFilter(advanced.maxViews);
+    const minLikes = numericFilter(advanced.minLikes);
+    const maxLikes = numericFilter(advanced.maxLikes);
+    const advancedActive = Object.values(advanced).some((value) => value.trim());
+
+    if (all.length === 0 && !advancedActive) {
       return { mask: sorted.map(() => true), matchedCount: sorted.length };
     }
     // Pre-build regex when exact mode is on; word boundary on either side.
@@ -621,14 +668,29 @@ function Results({
     let count = 0;
     const m = sorted.map((r) => {
       const desc = (r.desc ?? "").toLowerCase();
-      const hit = exact
-        ? matchers!.some((rx) => rx.test(desc))
-        : all.some((k) => desc.includes(k));
+      const keywordHit =
+        all.length === 0
+          ? true
+          : exact
+            ? matchers!.some((rx) => rx.test(desc))
+            : all.some((k) => desc.includes(k));
+      const creatorHit =
+        !creator || r.author.uniqueId.toLowerCase().includes(creator);
+      const dateHit =
+        (from === null || r.createTime >= from) &&
+        (to === null || r.createTime <= to);
+      const viewsHit =
+        (minViews === null || r.stats.plays >= minViews) &&
+        (maxViews === null || r.stats.plays <= maxViews);
+      const likesHit =
+        (minLikes === null || r.stats.likes >= minLikes) &&
+        (maxLikes === null || r.stats.likes <= maxLikes);
+      const hit = keywordHit && creatorHit && dateHit && viewsHit && likesHit;
       if (hit) count++;
       return hit;
     });
     return { mask: m, matchedCount: count };
-  }, [sorted, keywords, draft, exact]);
+  }, [sorted, keywords, draft, exact, advanced]);
 
   if (reposts.length === 0) {
     if (data.privateWebBlocked) {
@@ -771,6 +833,8 @@ function Results({
         setDraft={setDraft}
         exact={exact}
         setExact={setExact}
+        advanced={advanced}
+        setAdvanced={setAdvanced}
         matchedCount={matchedCount}
       />
 
@@ -869,6 +933,8 @@ function FilterBar({
   setDraft,
   exact,
   setExact,
+  advanced,
+  setAdvanced,
   matchedCount,
 }: {
   reposts: Repost[];
@@ -878,8 +944,16 @@ function FilterBar({
   setDraft: (s: string) => void;
   exact: boolean;
   setExact: (b: boolean) => void;
+  advanced: AdvancedFilters;
+  setAdvanced: (filters: AdvancedFilters) => void;
   matchedCount: number;
 }) {
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const advancedCount = Object.values(advanced).filter((value) =>
+    value.trim(),
+  ).length;
+  const filtersActive =
+    keywords.length > 0 || draft.trim().length > 0 || advancedCount > 0;
 
   // Extract hashtags from captions, rank by frequency. Skip ones already on
   // the active filter list.
@@ -899,6 +973,17 @@ function FilterBar({
       .map(([t, n]) => ({ kw: t, count: n }));
   }, [reposts]);
 
+  const creatorSuggestions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const repost of reposts) {
+      const handle = repost.author.uniqueId;
+      counts.set(handle, (counts.get(handle) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6);
+  }, [reposts]);
+
   function add(raw: string) {
     const k = raw.replace(/^#/, "").trim().toLowerCase();
     if (!k) return;
@@ -911,6 +996,19 @@ function FilterBar({
     setKeywords(keywords.filter((x) => x !== k));
   }
 
+  function updateAdvanced<K extends keyof AdvancedFilters>(
+    key: K,
+    value: AdvancedFilters[K],
+  ) {
+    setAdvanced({ ...advanced, [key]: value });
+  }
+
+  function clearAll() {
+    setKeywords([]);
+    setDraft("");
+    setAdvanced(EMPTY_ADVANCED_FILTERS);
+  }
+
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 sm:p-5">
       <div className="flex items-center justify-between gap-4 flex-wrap mb-3">
@@ -918,7 +1016,7 @@ function FilterBar({
           <div className="flex items-center gap-2">
             <Filter className="h-3.5 w-3.5" />
             <span className="text-[11px] font-medium uppercase tracking-[0.18em]">
-              Filter captions
+              Search &amp; filter
             </span>
           </div>
           {/* Exact / Fuzzy toggle. Fuzzy = substring match (default).
@@ -942,7 +1040,7 @@ function FilterBar({
             </span>
           </button>
         </div>
-        {(keywords.length > 0 || draft.trim()) && (
+        {filtersActive && (
           <div className="flex items-center gap-3 text-[11.5px] text-white/45">
             <span>
               <span className="text-white tnum">{matchedCount}</span>{" "}
@@ -950,20 +1048,17 @@ function FilterBar({
               <span className="tnum text-white/75">{reposts.length}</span>{" "}
               match
             </span>
-            {keywords.length > 0 && (
+            {filtersActive && (
               <>
                 <span aria-hidden className="text-white/15">
                   ·
                 </span>
                 <button
                   type="button"
-                  onClick={() => {
-                    setKeywords([]);
-                    setDraft("");
-                  }}
+                  onClick={clearAll}
                   className="text-[11px] uppercase tracking-[0.18em] text-white/45 hover:text-white transition-colors"
                 >
-                  Clear
+                  Clear all
                 </button>
               </>
             )}
@@ -1038,6 +1133,145 @@ function FilterBar({
             ))}
         </div>
       )}
+
+      <div className="mt-4 border-t border-white/8 pt-4">
+        <button
+          type="button"
+          aria-expanded={showAdvanced}
+          onClick={() => setShowAdvanced((open) => !open)}
+          className="inline-flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.025] px-3 text-[12px] font-medium text-white/70 transition-colors hover:border-white/20 hover:bg-white/[0.055] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+        >
+          <SlidersHorizontal className="h-3.5 w-3.5" />
+          Advanced filters
+          {advancedCount > 0 && (
+            <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-white px-1.5 py-0.5 text-[10px] font-semibold text-[#0a0a0b] tnum">
+              {advancedCount}
+            </span>
+          )}
+          <span
+            aria-hidden
+            className={`ml-1 text-white/35 transition-transform ${showAdvanced ? "rotate-180" : ""}`}
+          >
+            ↓
+          </span>
+        </button>
+
+        <AnimatePresence initial={false}>
+          {showAdvanced && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+              className="overflow-hidden"
+            >
+              <div className="grid gap-5 pt-5 lg:grid-cols-[1.15fr_1fr_1fr]">
+                <fieldset className="min-w-0">
+                  <legend className="mb-2 text-[10px] font-medium uppercase tracking-[0.16em] text-white/40">
+                    Creator
+                  </legend>
+                  <label className="flex h-10 items-center rounded-lg border border-white/10 bg-black/25 px-3 focus-within:border-white/25">
+                    <span className="text-[13px] text-white/35">@</span>
+                    <input
+                      value={advanced.creator}
+                      onChange={(event) =>
+                        updateAdvanced("creator", event.target.value)
+                      }
+                      placeholder="any creator"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      aria-label="Filter by creator"
+                      className="min-w-0 flex-1 bg-transparent pl-1 text-[13px] text-white outline-none placeholder:text-white/35"
+                    />
+                  </label>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {creatorSuggestions.slice(0, 4).map(([handle, count]) => (
+                      <button
+                        key={handle}
+                        type="button"
+                        onClick={() => updateAdvanced("creator", handle)}
+                        className="rounded-full bg-white/[0.035] px-2 py-1 text-[10.5px] text-white/50 transition-colors hover:bg-white/[0.07] hover:text-white"
+                      >
+                        @{handle}{" "}
+                        <span className="text-white/25 tnum">{count}</span>
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
+
+                <fieldset>
+                  <legend className="mb-2 text-[10px] font-medium uppercase tracking-[0.16em] text-white/40">
+                    Upload date
+                  </legend>
+                  <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                    <input
+                      type="date"
+                      value={advanced.dateFrom}
+                      max={advanced.dateTo || undefined}
+                      onChange={(event) =>
+                        updateAdvanced("dateFrom", event.target.value)
+                      }
+                      aria-label="Uploaded after"
+                      className="h-10 min-w-0 rounded-lg border border-white/10 bg-black/25 px-2.5 text-[12px] text-white/75 outline-none focus:border-white/25"
+                    />
+                    <span className="text-[11px] text-white/30">to</span>
+                    <input
+                      type="date"
+                      value={advanced.dateTo}
+                      min={advanced.dateFrom || undefined}
+                      onChange={(event) =>
+                        updateAdvanced("dateTo", event.target.value)
+                      }
+                      aria-label="Uploaded before"
+                      className="h-10 min-w-0 rounded-lg border border-white/10 bg-black/25 px-2.5 text-[12px] text-white/75 outline-none focus:border-white/25"
+                    />
+                  </div>
+                </fieldset>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {([
+                    ["Views", "minViews", "maxViews"],
+                    ["Likes", "minLikes", "maxLikes"],
+                  ] as const).map(([label, minKey, maxKey]) => (
+                    <fieldset key={label}>
+                      <legend className="mb-2 text-[10px] font-medium uppercase tracking-[0.16em] text-white/40">
+                        {label}
+                      </legend>
+                      <div className="grid gap-2">
+                        <input
+                          type="number"
+                          min="0"
+                          inputMode="numeric"
+                          value={advanced[minKey]}
+                          onChange={(event) =>
+                            updateAdvanced(minKey, event.target.value)
+                          }
+                          placeholder="minimum"
+                          aria-label={`Minimum ${label.toLowerCase()}`}
+                          className="h-10 min-w-0 rounded-lg border border-white/10 bg-black/25 px-2.5 text-[12px] text-white outline-none placeholder:text-white/35 focus:border-white/25"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          inputMode="numeric"
+                          value={advanced[maxKey]}
+                          onChange={(event) =>
+                            updateAdvanced(maxKey, event.target.value)
+                          }
+                          placeholder="maximum"
+                          aria-label={`Maximum ${label.toLowerCase()}`}
+                          className="h-10 min-w-0 rounded-lg border border-white/10 bg-black/25 px-2.5 text-[12px] text-white outline-none placeholder:text-white/35 focus:border-white/25"
+                        />
+                      </div>
+                    </fieldset>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
@@ -1218,37 +1452,46 @@ function UploadTimeline({ reposts }: { reposts: Repost[] }) {
     const max = Math.max(...times);
     const monthIndex = (d: Date) => d.getFullYear() * 12 + d.getMonth();
     const span = monthIndex(new Date(max * 1000)) - monthIndex(new Date(min * 1000));
-    const granularity: "month" | "quarter" | "year" =
-      span <= 23 ? "month" : span <= 95 ? "quarter" : "year";
+    const granularity: "month" | "year" =
+      span <= 119 ? "month" : "year";
 
     const keyOf = (d: Date) => {
       const y = d.getFullYear();
       if (granularity === "year") return `${y}`;
-      if (granularity === "quarter") return `${y}-Q${Math.floor(d.getMonth() / 3) + 1}`;
       return `${y}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     };
     const labelOf = (d: Date) => {
-      const y = `${d.getFullYear()}`.slice(2);
       if (granularity === "year") return `${d.getFullYear()}`;
-      if (granularity === "quarter") return `Q${Math.floor(d.getMonth() / 3) + 1} '${y}`;
-      return `${d.toLocaleString(undefined, { month: "short" })} '${y}`;
+      return d.toLocaleString(undefined, { month: "short", year: "numeric" });
     };
 
     // Walk continuous periods from first to last so empty gaps render as gaps.
     const cur = new Date(min * 1000);
     cur.setDate(1);
-    if (granularity === "quarter") cur.setMonth(Math.floor(cur.getMonth() / 3) * 3);
     if (granularity === "year") cur.setMonth(0);
     const end = new Date(max * 1000);
-    const step = granularity === "year" ? 12 : granularity === "quarter" ? 3 : 1;
+    const step = granularity === "year" ? 12 : 1;
 
-    const periods: { key: string; label: string }[] = [];
+    const periods: {
+      key: string;
+      label: string;
+      shortLabel: string;
+      year: number;
+    }[] = [];
     const seen = new Set<string>();
     while (cur <= end) {
       const k = keyOf(cur);
       if (!seen.has(k)) {
         seen.add(k);
-        periods.push({ key: k, label: labelOf(cur) });
+        periods.push({
+          key: k,
+          label: labelOf(cur),
+          shortLabel:
+            granularity === "year"
+              ? String(cur.getFullYear())
+              : cur.toLocaleString(undefined, { month: "short" }),
+          year: cur.getFullYear(),
+        });
       }
       cur.setMonth(cur.getMonth() + step);
     }
@@ -1261,106 +1504,187 @@ function UploadTimeline({ reposts }: { reposts: Repost[] }) {
     const buckets = periods.map((p) => ({ ...p, count: counts.get(p.key) ?? 0 }));
     const peak = buckets.reduce(
       (best, b) => (b.count > best.count ? b : best),
-      buckets[0] ?? { label: "", count: 0 },
+      buckets[0] ?? {
+        key: "",
+        label: "",
+        shortLabel: "",
+        year: 0,
+        count: 0,
+      },
     );
     return { buckets, granularity, peak };
   }, [reposts]);
 
-  const [hover, setHover] = useState<number | null>(null);
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [scrollState, setScrollState] = useState({
+    canGoBack: false,
+    canGoForward: false,
+  });
+  const scrollerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+
+    const updateScrollState = () => {
+      const maxScroll = scroller.scrollWidth - scroller.clientWidth;
+      setScrollState({
+        canGoBack: scroller.scrollLeft > 2,
+        canGoForward: scroller.scrollLeft < maxScroll - 2,
+      });
+    };
+
+    updateScrollState();
+    scroller.addEventListener("scroll", updateScrollState, { passive: true });
+    const resizeObserver = new ResizeObserver(updateScrollState);
+    resizeObserver.observe(scroller);
+
+    return () => {
+      scroller.removeEventListener("scroll", updateScrollState);
+      resizeObserver.disconnect();
+    };
+  }, [buckets.length, granularity]);
 
   // Not worth a chart for a single period or no dated videos.
   if (buckets.length < 2) return null;
   const max = Math.max(...buckets.map((b) => b.count), 1);
-  const granLabel =
-    granularity === "year"
-      ? "by year"
-      : granularity === "quarter"
-        ? "by quarter"
-        : "by month";
-  const active = hover != null ? buckets[hover] : peak;
-  // Few enough bars to print the count atop each without clutter.
-  const showLabels = buckets.length <= 14;
-  // Leave headroom for the count label so the tallest bar doesn't clip.
-  const heightScale = showLabels ? 0.82 : 1;
+  const active = activeIndex != null ? buckets[activeIndex] : peak;
+  const unitLabel = granularity === "year" ? "years" : "months";
+  const hasOverflow = scrollState.canGoBack || scrollState.canGoForward;
   // With few buckets, cap + center the plot so bars sit together instead of
   // floating across the full width. Many buckets fill the container.
   const plotMaxWidth =
     buckets.length < 12 ? `${buckets.length * 88}px` : undefined;
+  const plotMinWidth =
+    buckets.length > 14
+      ? `${buckets.length * (granularity === "month" ? 54 : 66)}px`
+      : undefined;
+
+  const scrollTimeline = (direction: -1 | 1) => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    scroller.scrollBy({
+      left: direction * Math.max(260, scroller.clientWidth * 0.72),
+      behavior: reduceMotion ? "auto" : "smooth",
+    });
+  };
 
   return (
     <div>
-      <div className="flex items-baseline justify-between mb-4 gap-4 flex-wrap">
-        <p className="text-[11px] uppercase tracking-[0.22em] text-white/55 inline-flex items-center gap-2">
+      <div className="mb-4">
+        <p className="inline-flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.18em] text-white/55">
           <CalendarRange className="h-3.5 w-3.5" />
           Upload timeline
-          <span className="hidden sm:inline text-white/35">
-            · when the reposted videos were made
-          </span>
         </p>
-        {active && active.count > 0 && (
-          <p className="text-[11px] uppercase tracking-[0.18em] text-white/40 tnum">
-            {hover == null && <span className="text-white/35">peak </span>}
-            <span className="text-white">{active.label}</span>
-            <span className="text-white/35"> · </span>
-            <span className="text-white">{active.count}</span>
-            <span className="text-white/35">
-              {" "}
-              {active.count === 1 ? "repost" : "reposts"}
-            </span>
-          </p>
-        )}
+        <p className="mt-1 text-sm text-white/45">
+          When the original videos were posted. TikTok does not reveal the
+          exact repost date.
+        </p>
       </div>
-      <div className="rounded-3xl border border-white/10 bg-[#0b0b0d]/90 backdrop-blur-xl px-5 sm:px-6 pt-5 pb-4">
-        <div className="mx-auto" style={{ maxWidth: plotMaxWidth }}>
+      <div className="overflow-hidden rounded-xl border border-white/10 bg-[#111113]">
+        <div className="flex min-h-16 items-center justify-between gap-4 border-b border-white/8 px-4 py-3 sm:px-5">
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-white/35">
+              {activeIndex == null
+                ? `Busiest ${granularity}`
+                : `Selected ${granularity}`}
+            </p>
+            {active && (
+              <p className="mt-1 truncate text-sm font-medium text-white/88 tnum">
+                {active.label}
+                <span className="text-white/30"> · </span>
+                {active.count} {active.count === 1 ? "repost" : "reposts"}
+              </p>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="hidden text-[11px] text-white/40 sm:inline">
+              {hasOverflow
+                ? `Scroll through ${buckets.length} ${unitLabel}`
+                : `${buckets.length} ${unitLabel} shown`}
+            </span>
+            <button
+              type="button"
+              onClick={() => scrollTimeline(-1)}
+              disabled={!scrollState.canGoBack}
+              aria-label="Show earlier dates"
+              className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 text-white/70 transition-colors hover:border-white/20 hover:bg-white/7 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 disabled:cursor-default disabled:opacity-25"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollTimeline(1)}
+              disabled={!scrollState.canGoForward}
+              aria-label="Show later dates"
+              className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 text-white/70 transition-colors hover:border-white/20 hover:bg-white/7 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 disabled:cursor-default disabled:opacity-25"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+        <div
+          ref={scrollerRef}
+          className="overflow-x-auto px-4 pb-3 pt-5 [scrollbar-gutter:stable] sm:px-5"
+        >
           <div
-            className="flex items-end gap-2 sm:gap-3 h-36 border-b border-white/10"
-            onMouseLeave={() => setHover(null)}
+            className="mx-auto flex items-end gap-1.5"
+            style={{ maxWidth: plotMaxWidth, minWidth: plotMinWidth }}
+            onMouseLeave={() => setActiveIndex(null)}
           >
             {buckets.map((b, i) => {
-              const isActive = hover === i || (hover == null && b === peak);
-              const h =
-                b.count > 0
-                  ? Math.max(6, (b.count / max) * 100 * heightScale)
-                  : 0;
+              const isActive =
+                activeIndex === i || (activeIndex == null && b === peak);
+              const barHeight =
+                b.count > 0 ? Math.max(5, (b.count / max) * 88) : 2;
+              const showYear =
+                granularity === "month" &&
+                (i === 0 || b.year !== buckets[i - 1]?.year);
               return (
-                <div
+                <button
+                  type="button"
                   key={b.key}
-                  title={`${b.label}: ${b.count} repost${b.count === 1 ? "" : "s"}`}
-                  onMouseEnter={() => setHover(i)}
-                  className="group relative flex-1 h-full flex flex-col items-center justify-end gap-1.5"
+                  onMouseEnter={() => setActiveIndex(i)}
+                  onFocus={() => setActiveIndex(i)}
+                  onBlur={() => setActiveIndex(null)}
+                  aria-label={`${b.label}: ${b.count} repost${b.count === 1 ? "" : "s"}`}
+                  className="group min-w-0 flex-1 text-center focus-visible:outline-none"
                 >
-                  {showLabels && b.count > 0 && (
+                  <span className="flex h-32 flex-col items-center justify-end gap-1.5 border-b border-white/10">
                     <span
                       className={`text-[10px] tnum leading-none transition-colors ${
-                        isActive ? "text-white" : "text-white/40"
+                        isActive ? "text-white" : "text-white/38"
                       }`}
                     >
-                      {b.count}
+                      {b.count > 0 ? b.count : "–"}
                     </span>
-                  )}
-                  {b.count > 0 ? (
-                    <div
-                      className={`w-full max-w-[72px] rounded-t-[4px] transition-[height,background-color] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                    <span
+                      className={`block w-full max-w-[44px] rounded-t-[4px] transition-[height,background-color] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] ${
                         isActive
-                          ? "bg-[#25f4ee] shadow-[0_0_20px_-4px_rgba(37,244,238,0.5)]"
-                          : "bg-[#25f4ee]/25 group-hover:bg-[#25f4ee]/55"
+                          ? "bg-[#25f4ee]"
+                          : b.count > 0
+                            ? "bg-white/18 group-hover:bg-white/35 group-focus-visible:bg-white/35"
+                            : "bg-white/8"
                       }`}
-                      style={{ height: `${h}%` }}
+                      style={{ height: `${barHeight}px` }}
                     />
-                  ) : (
-                    // Empty period. A faint baseline tick makes gaps readable.
-                    <div className="w-full max-w-[72px] h-[2px] rounded-full bg-white/10" />
-                  )}
-                </div>
+                  </span>
+                  <span
+                    className={`mt-2 block text-[10px] tnum transition-colors ${
+                      isActive ? "text-white" : "text-white/45"
+                    }`}
+                  >
+                    {b.shortLabel}
+                  </span>
+                  <span className="mt-0.5 block h-3 text-[9px] tnum text-white/25">
+                    {showYear ? b.year : ""}
+                  </span>
+                </button>
               );
             })}
-          </div>
-          <div className="mt-3 flex items-center justify-between text-[10.5px] uppercase tracking-[0.2em] text-white/35">
-            <span>{buckets[0].label}</span>
-            <span className="text-white/25 normal-case tracking-normal">
-              {granLabel}
-            </span>
-            <span>{buckets[buckets.length - 1].label}</span>
           </div>
         </div>
       </div>

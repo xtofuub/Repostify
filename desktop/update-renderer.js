@@ -74,7 +74,7 @@ function setState(detail) {
 
 elements.currentVersion.textContent = currentVersion;
 elements.latestVersion.textContent = latestVersion;
-elements.meta.textContent = `${formatBytes(assetBytes)} · Windows x64 · ${buildKind}`;
+elements.meta.textContent = `${formatBytes(assetBytes)} \u00b7 Windows x64 \u00b7 ${buildKind}`;
 
 document.querySelectorAll("[data-action]").forEach((button) => {
   button.addEventListener("click", () => {
