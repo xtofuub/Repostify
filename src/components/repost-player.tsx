@@ -339,7 +339,7 @@ export function RepostPlayer({
       wheelGestureRef.current = false;
       wheelResetRef.current = null;
     }, 180);
-    if (wheelGestureRef.current || Math.abs(e.deltaY) < 18) return;
+    if (wheelGestureRef.current || e.deltaY === 0) return;
     wheelGestureRef.current = true;
     if (e.deltaY > 0) goNext();
     else goPrev();
