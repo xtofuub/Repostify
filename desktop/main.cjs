@@ -185,6 +185,32 @@ function openWindow(url) {
   });
   void mainWindow.webContents.insertCSS(DESKTOP_CHROME_CSS);
 
+  // Wheel events inside TikTok's cross-origin iframe never bubble into React.
+  // Electron can install a tiny forwarder inside that frame without covering
+  // or disabling any of TikTok's native controls.
+  mainWindow.webContents.on("frame-created", (_event, { frame }) => {
+    frame?.on("dom-ready", () => {
+      if (!frame.url.startsWith("https://www.tiktok.com/player/")) return;
+      void frame
+        .executeJavaScript(`
+          (() => {
+            if (window.__repostifyWheelForwarder) return;
+            window.__repostifyWheelForwarder = true;
+            if (/access denied|don't have permission to access/i.test(document.body?.innerText || "")) {
+              window.parent.postMessage({ type: "repostify:player-denied" }, "*");
+            }
+            window.addEventListener("wheel", (event) => {
+              window.parent.postMessage({
+                type: "repostify:player-wheel",
+                deltaY: event.deltaY,
+              }, "*");
+            }, { capture: true, passive: true });
+          })();
+        `)
+        .catch(() => {});
+    });
+  });
+
   mainWindow.webContents.setWindowOpenHandler(({ url: target }) => {
     if (target.startsWith("https://") || target.startsWith("http://")) {
       void shell.openExternal(target);

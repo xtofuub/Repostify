@@ -114,9 +114,18 @@ export function RepostPlayer({
   const tiktokRestoreTimersRef = useRef<number[]>([]);
   const [photoState, setPhotoState] = useState({ repostId: "", index: 0 });
   const [customPlayerId, setCustomPlayerId] = useState<string | null>(null);
+  const [tiktokStatus, setTikTokStatus] = useState({
+    repostId: "",
+    attempt: 0,
+    ready: false,
+  });
   const imageUrls = repost?.imageUrls ?? [];
   const isPhoto = imageUrls.length > 0;
   const photoIndex = photoState.repostId === repostId ? photoState.index : 0;
+  const tiktokAttempt =
+    tiktokStatus.repostId === repostId ? tiktokStatus.attempt : 0;
+  const tiktokReady =
+    tiktokStatus.repostId === repostId && tiktokStatus.ready;
   const photoMusicUrl = isPhoto && repost?.musicUrl ? repost.musicUrl : "";
   const closePlayer = useCallback(() => {
     setCustomPlayerId(null);
@@ -213,6 +222,11 @@ export function RepostPlayer({
       if (!data || typeof data !== "object") return;
 
       if (data.type === "onPlayerReady") {
+        setTikTokStatus((current) =>
+          current.repostId === repostId
+            ? { ...current, ready: true }
+            : { repostId, attempt: 0, ready: true },
+        );
         restoreTikTokPlayer(iframeRef.current?.contentWindow ?? null);
         return;
       }
@@ -248,6 +262,18 @@ export function RepostPlayer({
     repostId,
     restoreTikTokPlayer,
   ]);
+
+  useEffect(() => {
+    if (!repostId || customPlayerId === repostId || tiktokReady) return;
+    const timer = window.setTimeout(() => {
+      if (tiktokAttempt === 0) {
+        setTikTokStatus({ repostId, attempt: 1, ready: false });
+      } else {
+        setCustomPlayerId(repostId);
+      }
+    }, 7_000);
+    return () => window.clearTimeout(timer);
+  }, [customPlayerId, repostId, tiktokAttempt, tiktokReady]);
 
   useEffect(() => {
     if (!isPhoto || imageUrls.length < 2) return;
@@ -294,6 +320,45 @@ export function RepostPlayer({
     }
   }, [index, onIndexChange, reposts.length]);
 
+  const navigateWheel = useCallback(
+    (deltaY: number) => {
+      if (wheelResetRef.current !== null) {
+        window.clearTimeout(wheelResetRef.current);
+      }
+      wheelResetRef.current = window.setTimeout(() => {
+        wheelGestureRef.current = false;
+        wheelResetRef.current = null;
+      }, 180);
+      if (wheelGestureRef.current || deltaY === 0) return;
+      wheelGestureRef.current = true;
+      if (deltaY > 0) goNext();
+      else goPrev();
+    },
+    [goNext, goPrev],
+  );
+
+  useEffect(() => {
+    if (!repostId) return;
+    const onMessage = (event: MessageEvent) => {
+      if (!event.origin.endsWith("tiktok.com")) return;
+      const data = event.data as { type?: string; deltaY?: unknown } | null;
+      if (data?.type === "repostify:player-wheel") {
+        const deltaY = Number(data.deltaY);
+        if (Number.isFinite(deltaY)) navigateWheel(deltaY);
+        return;
+      }
+      if (data?.type === "repostify:player-denied") {
+        if (tiktokAttempt === 0) {
+          setTikTokStatus({ repostId, attempt: 1, ready: false });
+        } else {
+          setCustomPlayerId(repostId);
+        }
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [navigateWheel, repostId, tiktokAttempt]);
+
   useEffect(() => {
     if (!repostId) return;
     const onKey = (e: KeyboardEvent) => {
@@ -328,21 +393,13 @@ export function RepostPlayer({
       if (wheelResetRef.current !== null) {
         window.clearTimeout(wheelResetRef.current);
       }
+      wheelGestureRef.current = false;
+      wheelResetRef.current = null;
     };
   }, [changePhoto, closePlayer, goNext, goPrev, imageUrls.length, isPhoto, repostId]);
 
   function onWheel(e: React.WheelEvent) {
-    if (wheelResetRef.current !== null) {
-      window.clearTimeout(wheelResetRef.current);
-    }
-    wheelResetRef.current = window.setTimeout(() => {
-      wheelGestureRef.current = false;
-      wheelResetRef.current = null;
-    }, 180);
-    if (wheelGestureRef.current || e.deltaY === 0) return;
-    wheelGestureRef.current = true;
-    if (e.deltaY > 0) goNext();
-    else goPrev();
+    navigateWheel(e.deltaY);
   }
 
   return (
@@ -371,8 +428,8 @@ export function RepostPlayer({
               {repost.id && customPlayerId !== repost.id ? (
                 <iframe
                   ref={iframeRef}
-                  key={`tiktok-${repost.id}`}
-                  src={`https://www.tiktok.com/player/v1/${repost.id}?autoplay=1&loop=1&muted=0&controls=1&music_info=0&description=0&rel=0&native_context_menu=0&closed_caption=0`}
+                  key={`tiktok-${repost.id}-${tiktokAttempt}`}
+                  src={`https://www.tiktok.com/player/v1/${repost.id}?autoplay=1&loop=1&muted=0&controls=1&music_info=0&description=0&rel=0&native_context_menu=0&closed_caption=0&repostify_retry=${tiktokAttempt}`}
                   title={`TikTok player for repost ${repost.id}`}
                   allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
                   allowFullScreen
