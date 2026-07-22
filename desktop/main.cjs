@@ -58,7 +58,7 @@ if (!gotLock) {
 
 function runtimeRoot() {
   return app.isPackaged
-    ? path.join(app.getAppPath(), "runtime")
+    ? path.join(process.resourcesPath, "app.asar.unpacked", "runtime")
     : path.join(__dirname, "stage", "runtime");
 }
 
@@ -115,6 +115,7 @@ async function startServer() {
   const log = createWriteStream(path.join(dataDir, "server.log"), {
     flags: "a",
   });
+  log.write(`[desktop] Starting runtime from ${root}\n`);
   serverProcess = spawn(process.execPath, [serverFile], {
     cwd: root,
     env: {
@@ -123,12 +124,20 @@ async function startServer() {
       HOSTNAME: "127.0.0.1",
       PORT: String(port),
       NODE_ENV: "production",
+      NODE_PATH: path.join(app.getAppPath(), "node_modules"),
       NEXT_TELEMETRY_DISABLED: "1",
       REPOSTIFY_DATA_DIR: dataDir,
       REPOSTIFY_DESKTOP: "1",
     },
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
+  });
+  const serverStarted = new Promise((resolve, reject) => {
+    serverProcess.once("spawn", resolve);
+    serverProcess.once("error", (error) => {
+      log.write(`[desktop] Failed to spawn local server: ${error.stack ?? error}\n`);
+      reject(error);
+    });
   });
   serverProcess.stdout.pipe(log);
   serverProcess.stderr.pipe(log);
@@ -143,6 +152,7 @@ async function startServer() {
     }
   });
 
+  await serverStarted;
   const url = `http://127.0.0.1:${port}`;
   await waitForServer(url);
   return url;

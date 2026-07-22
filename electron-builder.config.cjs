@@ -7,10 +7,10 @@ module.exports = {
   appId: "app.repostify.desktop",
   productName: "Repostify",
   electronVersion,
-  // One archive is substantially faster for Windows Defender to inspect and
-  // for NSIS to place than thousands of small JavaScript files.
+  // The server needs a real working directory, while its JavaScript
+  // dependencies can stay in the archive and load through Electron's Node.
   asar: true,
-  asarUnpack: ["runtime/node_modules/**/*.node"],
+  asarUnpack: ["runtime/**/*"],
   compression: "normal",
   electronLanguages: ["en-US"],
   forceCodeSigning: requireSigning,
