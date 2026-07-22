@@ -10,7 +10,7 @@ module.exports = {
   // The server needs a real working directory, while its JavaScript
   // dependencies can stay in the archive and load through Electron's Node.
   asar: true,
-  asarUnpack: ["runtime/**/*"],
+  asarUnpack: ["runtime/**/*", "node_modules/playwright-core/**/*"],
   compression: "normal",
   electronLanguages: ["en-US"],
   forceCodeSigning: requireSigning,
