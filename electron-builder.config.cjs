@@ -41,9 +41,9 @@ module.exports = {
     createDesktopShortcut: true,
     createStartMenuShortcut: true,
     runAfterFinish: true,
-    // ZIP trades a small amount of download size for much faster extraction
-    // on the one-click install screen.
-    useZip: true,
+    // Keep electron-builder's default LZMA package. `useZip` is intended for
+    // differential packages and produced installers that NSIS could not open
+    // reliably when launched by Repostify's updater.
   },
   portable: {
     artifactName: "Repostify-${version}-Windows-${arch}-Portable.${ext}",
