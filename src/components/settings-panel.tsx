@@ -39,6 +39,7 @@ type DesktopBridge = {
   getInfo: () => Promise<AppInfo>;
   checkForUpdates: () => Promise<UpdateResult>;
   openDataFolder: () => Promise<boolean>;
+  syncTikTokSession: () => Promise<{ synced: number }>;
 };
 
 declare global {

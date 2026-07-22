@@ -1,6 +1,6 @@
 {
   "name": "repostify",
-  "version": "0.1.9",
+  "version": "2.0.0",
   "description": "Search, play, and compare visible TikTok repost trails.",
   "author": "xtofuub",
   "license": "MIT",
@@ -11,6 +11,7 @@
     "start": "next start",
     "lint": "eslint",
     "desktop:build": "node desktop/build.cjs",
+    "desktop:build:signed": "node desktop/build.cjs --signed",
     "desktop:run": "electron desktop/main.cjs",
     "tiktok:login": "node scripts/tiktok-login.mjs"
   },

@@ -19,6 +19,21 @@ const runtime = path.join(stage, "runtime");
 const node = process.execPath;
 const nextCli = path.join(root, "node_modules", "next", "dist", "bin", "next");
 const builderCli = path.join(root, "node_modules", "electron-builder", "cli.js");
+const signedBuild = process.argv.includes("--signed");
+
+if (signedBuild) {
+  const hasCertificate = Boolean(
+    process.env.WIN_CSC_LINK ||
+      process.env.CSC_LINK ||
+      process.env.WIN_CSC_SUBJECT_NAME,
+  );
+  if (!hasCertificate) {
+    throw new Error(
+      "Signed build requested, but no certificate was provided. Set WIN_CSC_LINK and WIN_CSC_KEY_PASSWORD, or WIN_CSC_SUBJECT_NAME for a certificate in the Windows certificate store.",
+    );
+  }
+  process.env.REPOSTIFY_REQUIRE_SIGNING = "1";
+}
 
 function run(command, args, cwd = root) {
   const result = spawnSync(command, args, {

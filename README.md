@@ -141,13 +141,23 @@ The first scan downloads [cloakbrowser](https://github.com/CloakHQ/CloakBrowser)
 <details>
 <summary><strong>Build the Windows EXEs</strong></summary>
 
-~~~bash
+~~~powershell
 # Installer
 pnpm desktop:build
+
+# Signed installer (requires a trusted Windows code-signing certificate)
+$env:WIN_CSC_LINK = "C:\\path\\to\\certificate.pfx"
+$env:WIN_CSC_KEY_PASSWORD = "your-certificate-password"
+pnpm desktop:build:signed
 
 # Portable
 node desktop/build.cjs --portable
 ~~~
+
+Signing credentials must stay in local environment variables or CI secrets;
+never commit the certificate or password. The signed build command fails closed
+when no certificate is configured, so a release cannot silently claim to be
+signed while still showing Windows' "Unknown publisher" warning.
 
 The finished files are written to:
 

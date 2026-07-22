@@ -6,6 +6,7 @@ const {
   createWriteStream,
   existsSync,
   mkdirSync,
+  readFileSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -654,6 +655,59 @@ ipcMain.handle("repostify:open-data-folder", async (event) => {
   if (!isMainRenderer(event)) throw new Error("Untrusted renderer.");
   const error = await shell.openPath(app.getPath("userData"));
   return error === "";
+});
+
+ipcMain.handle("repostify:sync-tiktok-session", async (event) => {
+  if (!isMainRenderer(event)) throw new Error("Untrusted renderer.");
+
+  const cookieStore = event.sender.session.cookies;
+  const existing = await cookieStore.get({ domain: "tiktok.com" });
+  await Promise.all(
+    existing.map((cookie) => {
+      const protocol = cookie.secure ? "https" : "http";
+      const host = cookie.domain.replace(/^\./, "");
+      return cookieStore.remove(`${protocol}://${host}${cookie.path}`, cookie.name);
+    }),
+  );
+
+  const sessionPath = path.join(app.getPath("userData"), ".tiktok-session.json");
+  if (!existsSync(sessionPath)) return { synced: 0 };
+
+  const stored = JSON.parse(readFileSync(sessionPath, "utf8"));
+  const cookies = Array.isArray(stored?.cookies) ? stored.cookies : [];
+  let synced = 0;
+  for (const cookie of cookies) {
+    if (!cookie?.name || !cookie?.value || !/(^|\.)tiktok\.com$/i.test(cookie.domain ?? "")) {
+      continue;
+    }
+    const host = cookie.domain.replace(/^\./, "");
+    const cookiePath = cookie.path || "/";
+    const sameSite =
+      cookie.sameSite === "None"
+        ? "no_restriction"
+        : cookie.sameSite === "Strict"
+          ? "strict"
+          : cookie.sameSite === "Lax"
+            ? "lax"
+            : "unspecified";
+    const details = {
+      url: `${cookie.secure === false ? "http" : "https"}://${host}${cookiePath}`,
+      name: cookie.name,
+      value: cookie.value,
+      domain: cookie.domain,
+      path: cookiePath,
+      secure: cookie.secure !== false,
+      httpOnly: Boolean(cookie.httpOnly),
+      sameSite,
+    };
+    if (Number.isFinite(cookie.expires) && cookie.expires > 0) {
+      details.expirationDate = cookie.expires;
+    }
+    await cookieStore.set(details);
+    synced += 1;
+  }
+  await event.sender.session.flushStorageData();
+  return { synced };
 });
 
 app.on("second-instance", () => {

@@ -455,6 +455,22 @@ export async function scrapeReposts(
   });
   const page = await context.newPage();
 
+  // The scraper only needs TikTok's document, scripts, and JSON responses.
+  // Skipping heavyweight profile media makes the repost XHR arrive sooner and
+  // avoids spending bandwidth decoding assets that are never rendered here.
+  await page.route("**/*", async (route) => {
+    const resourceType = route.request().resourceType();
+    if (
+      resourceType === "image" ||
+      resourceType === "media" ||
+      resourceType === "font"
+    ) {
+      await route.abort();
+      return;
+    }
+    await route.continue();
+  });
+
   const reposts: Repost[] = [];
   const seen = new Set<string>();
   let hasMore = false;
@@ -824,12 +840,17 @@ export async function scrapeReposts(
     }
 
     if (clickedTab) {
-      await page
-        .waitForResponse(
-          (r) => /\/api\/repost\/item_list/i.test(r.url()),
-          { timeout: 6_000 },
-        )
-        .catch(() => {});
+      // The response listener above is installed before the click. A fast XHR
+      // often completes while Playwright is still resolving click(); waiting
+      // for a *new* response here used to add a pointless six-second pause.
+      if (!firstXhrUrl) {
+        await page
+          .waitForResponse(
+            (r) => /\/api\/repost\/item_list/i.test(r.url()),
+            { timeout: 6_000 },
+          )
+          .catch(() => {});
+      }
       if (serverBlocked) {
         captchaSuspected = true;
       }

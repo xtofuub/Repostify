@@ -43,7 +43,7 @@ export function RepostCard({
   // the proxy. Fall back to the play-icon placeholder instead of a blank tile.
   const [coverBroken, setCoverBroken] = useState(false);
   return (
-    <div className="group relative rounded-xl overflow-hidden border border-white/10 bg-white/[0.015] transition-[transform,border-color] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1 hover:border-white/25">
+    <div className="group relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.015] transition-[transform,border-color] duration-200 ease-out hover:-translate-y-0.5 hover:border-white/25">
       <button
         type="button"
         onClick={() => onPlay(repost)}
@@ -57,8 +57,9 @@ export function RepostCard({
               src={coverSrc(repost)}
               alt={repost.desc.slice(0, 80) || `Repost ${repost.id}`}
               loading="lazy"
+              decoding="async"
               referrerPolicy="no-referrer"
-              className="h-full w-full object-cover transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.04]"
+              className="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.025]"
               onError={() => setCoverBroken(true)}
             />
           ) : (
@@ -93,6 +94,7 @@ export function RepostCard({
                   src={proxied(repost.author.avatar)}
                   alt={`@${repost.author.uniqueId}`}
                   loading="lazy"
+                  decoding="async"
                   referrerPolicy="no-referrer"
                   className="h-7 w-7 rounded-full object-cover bg-white/[0.05] border border-white/15"
                 />

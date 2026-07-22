@@ -204,11 +204,15 @@ export function CompareSearch({
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                   {intersection.shared.map((r, i) => (
-                    <RepostCard
+                    <div
                       key={r.id}
-                      repost={r}
-                      onPlay={() => setPlayerIndex(i)}
-                    />
+                      className="[content-visibility:auto] [contain-intrinsic-size:auto_520px]"
+                    >
+                      <RepostCard
+                        repost={r}
+                        onPlay={() => setPlayerIndex(i)}
+                      />
+                    </div>
                   ))}
                 </div>
               </section>

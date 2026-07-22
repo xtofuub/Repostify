@@ -10,4 +10,7 @@ contextBridge.exposeInMainWorld("repostifyDesktop", {
   openDataFolder() {
     return ipcRenderer.invoke("repostify:open-data-folder");
   },
+  syncTikTokSession() {
+    return ipcRenderer.invoke("repostify:sync-tiktok-session");
+  },
 });

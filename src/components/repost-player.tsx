@@ -50,6 +50,38 @@ function formatPostedDate(unixSec: number): string {
   }).format(new Date(unixSec * 1000));
 }
 
+// v5 clears the old forced-photo-mute state. TikTok's photo embed exposes its
+// native controls but does not attach the post's music URL, so Repostify plays
+// that URL invisibly and mirrors the native controls onto it.
+const TIKTOK_VOLUME_KEY = "repostify:tiktok-volume-v5";
+const DEFAULT_TIKTOK_VOLUME = 20;
+
+type StoredTikTokVolume = {
+  volume: number;
+  muted: boolean;
+};
+
+function readTikTokVolume(): StoredTikTokVolume {
+  if (typeof window === "undefined") {
+    return { volume: DEFAULT_TIKTOK_VOLUME, muted: false };
+  }
+  try {
+    const stored = JSON.parse(
+      window.localStorage.getItem(TIKTOK_VOLUME_KEY) ?? "null",
+    ) as Partial<StoredTikTokVolume> | null;
+    const volume = Math.max(
+      0,
+      Math.min(100, Number(stored?.volume ?? DEFAULT_TIKTOK_VOLUME)),
+    );
+    return {
+      volume: Number.isFinite(volume) ? volume : DEFAULT_TIKTOK_VOLUME,
+      muted: Boolean(stored?.muted),
+    };
+  } catch {
+    return { volume: DEFAULT_TIKTOK_VOLUME, muted: false };
+  }
+}
+
 export function RepostPlayer({
   reposts,
   index,
@@ -73,63 +105,149 @@ export function RepostPlayer({
         feedPosition: repost.feedPosition,
       })
     : false;
-  const wheelLockRef = useRef(0);
+  const wheelGestureRef = useRef(false);
+  const wheelResetRef = useRef<number | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const photoAudioRef = useRef<HTMLAudioElement>(null);
+  const tiktokVolumeRef = useRef<StoredTikTokVolume>(readTikTokVolume());
+  const restoringTikTokVolumeRef = useRef(true);
+  const tiktokRestoreTimersRef = useRef<number[]>([]);
   const [photoState, setPhotoState] = useState({ repostId: "", index: 0 });
-  const [directPlayerId, setDirectPlayerId] = useState<string | null>(null);
+  const [customPlayerId, setCustomPlayerId] = useState<string | null>(null);
   const imageUrls = repost?.imageUrls ?? [];
   const isPhoto = imageUrls.length > 0;
   const photoIndex = photoState.repostId === repostId ? photoState.index : 0;
-  const photoMusicUrl =
-    isPhoto && repost?.musicUrl ? repost.musicUrl : "";
+  const photoMusicUrl = isPhoto && repost?.musicUrl ? repost.musicUrl : "";
   const closePlayer = useCallback(() => {
-    setDirectPlayerId(null);
+    setCustomPlayerId(null);
     onClose();
   }, [onClose]);
 
-  // TikTok iframe player exposes a postMessage API. Spec:
-  // https://developers.tiktok.com/doc/embed-player. Posting {type:"unMute"}
-  // works only after the player signals onPlayerReady.
-  const postToPlayer = useCallback((type: string, value?: unknown) => {
-    iframeRef.current?.contentWindow?.postMessage(
-      { type, value, "x-tiktok-player": true },
-      "*",
-    );
+  const syncPhotoAudio = useCallback((next: StoredTikTokVolume) => {
+    const audio = photoAudioRef.current;
+    if (!audio) return;
+    audio.volume = Math.max(0, Math.min(1, next.volume / 100));
+    audio.muted = next.muted || next.volume <= 0;
   }, []);
 
-  // Listen for ready signal from the iframe, then unmute.
-  useEffect(() => {
-    if (!repostId) return;
-    const onMsg = (e: MessageEvent) => {
-      if (!e.origin.endsWith("tiktok.com")) return;
-      const data = typeof e.data === "string"
-        ? (() => { try { return JSON.parse(e.data); } catch { return null; } })()
-        : e.data;
-      if (!data || typeof data !== "object") return;
-      const t = (data as { type?: string }).type;
-      if (t === "onPlayerReady" || t === "onPlayerReadyForUnMute" || t === "playerReady") {
-        postToPlayer("unMute");
-      }
-    };
-    window.addEventListener("message", onMsg);
-    return () => window.removeEventListener("message", onMsg);
-  }, [repostId, postToPlayer]);
+  const persistTikTokVolume = useCallback((next: StoredTikTokVolume) => {
+    tiktokVolumeRef.current = next;
+    syncPhotoAudio(next);
+    try {
+      window.localStorage.setItem(TIKTOK_VOLUME_KEY, JSON.stringify(next));
+    } catch {}
+  }, [syncPhotoAudio]);
 
-  // TikTok's iframe renders photo slideshows but does not reliably start the
-  // attached track. Play the exact music URL returned with the post. Opening
-  // this modal is a user gesture, so Electron permits audible autoplay.
+  const restoreTikTokPlayer = useCallback((target: Window | null) => {
+    tiktokRestoreTimersRef.current.forEach(window.clearTimeout);
+    tiktokRestoreTimersRef.current = [];
+    restoringTikTokVolumeRef.current = true;
+    [100, 500, 1_500].forEach((delay) => {
+      tiktokRestoreTimersRef.current.push(
+        window.setTimeout(() => {
+          const saved = tiktokVolumeRef.current;
+          target?.postMessage(
+            { type: "setVolume", value: saved.volume, "x-tiktok-player": true },
+            "*",
+          );
+          target?.postMessage(
+            {
+              type: saved.muted ? "mute" : "unMute",
+              value: undefined,
+              "x-tiktok-player": true,
+            },
+            "*",
+          );
+          restoringTikTokVolumeRef.current = false;
+          target?.postMessage(
+            { type: "play", value: undefined, "x-tiktok-player": true },
+            "*",
+          );
+        }, delay),
+      );
+    });
+  }, []);
+
+  useEffect(
+    () => () => {
+      tiktokRestoreTimersRef.current.forEach(window.clearTimeout);
+    },
+    [],
+  );
+
   useEffect(() => {
     const audio = photoAudioRef.current;
     if (!audio || !photoMusicUrl) return;
-    audio.muted = false;
-    audio.volume = 1;
+
+    syncPhotoAudio(tiktokVolumeRef.current);
     void audio.play().catch(() => {});
+
+    const resume = () => {
+      syncPhotoAudio(tiktokVolumeRef.current);
+      void audio.play().catch(() => {});
+    };
+    audio.addEventListener("canplay", resume);
     return () => {
+      audio.removeEventListener("canplay", resume);
       audio.pause();
       audio.currentTime = 0;
     };
-  }, [photoMusicUrl, repostId]);
+  }, [photoMusicUrl, repostId, syncPhotoAudio]);
+
+  useEffect(() => {
+    if (!repostId || customPlayerId === repostId) return;
+    restoringTikTokVolumeRef.current = true;
+
+    const onMessage = (event: MessageEvent) => {
+      if (!event.origin.endsWith("tiktok.com")) return;
+      const data =
+        typeof event.data === "string"
+          ? (() => {
+              try {
+                return JSON.parse(event.data) as { type?: string; value?: unknown };
+              } catch {
+                return null;
+              }
+            })()
+          : (event.data as { type?: string; value?: unknown } | null);
+      if (!data || typeof data !== "object") return;
+
+      if (data.type === "onPlayerReady") {
+        restoreTikTokPlayer(iframeRef.current?.contentWindow ?? null);
+        return;
+      }
+
+      if (data.type === "onVolumeChange") {
+        if (restoringTikTokVolumeRef.current) return;
+        const raw = Number(data.value);
+        if (!Number.isFinite(raw)) return;
+        const volume = Math.max(0, Math.min(100, raw));
+        persistTikTokVolume({
+          volume,
+          muted: volume <= 0 || tiktokVolumeRef.current.muted,
+        });
+        return;
+      }
+
+      if (data.type === "onMute" && typeof data.value === "boolean") {
+        if (restoringTikTokVolumeRef.current) return;
+        persistTikTokVolume({
+          ...tiktokVolumeRef.current,
+          muted: data.value,
+        });
+      }
+    };
+
+    window.addEventListener("message", onMessage);
+    return () => {
+      window.removeEventListener("message", onMessage);
+    };
+  }, [
+    customPlayerId,
+    persistTikTokVolume,
+    repostId,
+    restoreTikTokPlayer,
+  ]);
 
   useEffect(() => {
     if (!isPhoto || imageUrls.length < 2) return;
@@ -161,28 +279,17 @@ export function RepostPlayer({
     [imageUrls.length, repostId],
   );
 
-  // Belt-and-suspenders: also try unmuting on a short delay after load, in
-  // case the player never fires onPlayerReady but is still accepting messages.
-  useEffect(() => {
-    if (!repostId) return;
-    const ids: number[] = [];
-    [400, 900, 1600, 2500].forEach((delay) => {
-      ids.push(window.setTimeout(() => postToPlayer("unMute"), delay));
-    });
-    return () => ids.forEach(clearTimeout);
-  }, [repostId, postToPlayer]);
-
   const goPrev = useCallback(() => {
     if (index === null) return;
     if (index > 0) {
-      setDirectPlayerId(null);
+      setCustomPlayerId(null);
       onIndexChange(index - 1);
     }
   }, [index, onIndexChange]);
   const goNext = useCallback(() => {
     if (index === null) return;
     if (index < reposts.length - 1) {
-      setDirectPlayerId(null);
+      setCustomPlayerId(null);
       onIndexChange(index + 1);
     }
   }, [index, onIndexChange, reposts.length]);
@@ -218,14 +325,22 @@ export function RepostPlayer({
     return () => {
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = prev;
+      if (wheelResetRef.current !== null) {
+        window.clearTimeout(wheelResetRef.current);
+      }
     };
   }, [changePhoto, closePlayer, goNext, goPrev, imageUrls.length, isPhoto, repostId]);
 
   function onWheel(e: React.WheelEvent) {
-    const now = Date.now();
-    if (now - wheelLockRef.current < 350) return;
-    if (Math.abs(e.deltaY) < 25) return;
-    wheelLockRef.current = now;
+    if (wheelResetRef.current !== null) {
+      window.clearTimeout(wheelResetRef.current);
+    }
+    wheelResetRef.current = window.setTimeout(() => {
+      wheelGestureRef.current = false;
+      wheelResetRef.current = null;
+    }, 180);
+    if (wheelGestureRef.current || Math.abs(e.deltaY) < 18) return;
+    wheelGestureRef.current = true;
     if (e.deltaY > 0) goNext();
     else goPrev();
   }
@@ -249,16 +364,26 @@ export function RepostPlayer({
             className="absolute inset-0 bg-black/80 backdrop-blur-xl"
           />
 
-          <motion.div
-            key={`player-frame-${repost.id}`}
-            initial={{ opacity: 0, scale: 0.96, y: 16 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.97, y: 8 }}
-            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-            className="relative z-10 grid grid-cols-1 md:grid-cols-[auto_22rem] gap-4 max-h-[88vh]"
+          <div
+            className="relative z-10 grid max-h-[88vh] grid-cols-1 gap-4 md:grid-cols-[auto_22rem]"
           >
-            <div className="relative bg-black rounded-2xl overflow-hidden flex items-center justify-center w-[min(48vh,calc(88vh*9/16))] aspect-[9/16] max-h-[88vh]">
-              {isPhoto ? (
+            <div className="relative flex aspect-[9/16] max-h-[88vh] w-[min(48vh,calc(88vh*9/16))] items-center justify-center overflow-hidden rounded-2xl bg-black">
+              {repost.id && customPlayerId !== repost.id ? (
+                <iframe
+                  ref={iframeRef}
+                  key={`tiktok-${repost.id}`}
+                  src={`https://www.tiktok.com/player/v1/${repost.id}?autoplay=1&loop=1&muted=0&controls=1&music_info=0&description=0&rel=0&native_context_menu=0&closed_caption=0`}
+                  title={`TikTok player for repost ${repost.id}`}
+                  allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+                  allowFullScreen
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  className="h-full w-full border-0"
+                  loading="eager"
+                  onLoad={(event) =>
+                    restoreTikTokPlayer(event.currentTarget.contentWindow)
+                  }
+                />
+              ) : isPhoto ? (
                 <div
                   className="relative h-full w-full overflow-hidden bg-black"
                   role="group"
@@ -297,42 +422,22 @@ export function RepostPlayer({
                       </span>
                     </>
                   )}
-                  {photoMusicUrl && (
-                    <audio
-                      ref={photoAudioRef}
-                      key={`photo-music-${repost.id}`}
-                      src={proxiedMedia(photoMusicUrl, repost.webUrl)}
-                      autoPlay
-                      loop
-                      preload="auto"
-                    />
-                  )}
                 </div>
-              ) : repost.id && directPlayerId !== repost.id ? (
-                <iframe
-                  ref={iframeRef}
-                  key={`tiktok-${repost.id}`}
-                  src={`https://www.tiktok.com/player/v1/${repost.id}?autoplay=1&loop=1&mute=0&music_info=0&description=0&rel=0&native_context_menu=0&closed_caption=1`}
-                  title={`Repost ${repost.id}`}
-                  allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
-                  allowFullScreen
-                  referrerPolicy="strict-origin-when-cross-origin"
-                  className="h-full w-full border-0"
-                  loading="eager"
-                />
               ) : repost.playUrl ? (
-                <video
-                  key={`direct-${repost.id}`}
-                  src={proxiedMedia(repost.playUrl, repost.webUrl)}
-                  poster={repost.cover ? proxied(repost.cover) : undefined}
-                  autoPlay
-                  loop
-                  playsInline
-                  controls
-                  preload="metadata"
-                  onError={() => setDirectPlayerId(null)}
-                  className="h-full w-full bg-black object-contain"
-                />
+                <>
+                  <video
+                    key={`direct-${repost.id}`}
+                    src={proxiedMedia(repost.playUrl, repost.webUrl)}
+                    poster={repost.cover ? proxied(repost.cover) : undefined}
+                    autoPlay
+                    loop
+                    playsInline
+                    controls
+                    preload="metadata"
+                    onError={() => setCustomPlayerId(null)}
+                    className="h-full w-full bg-black object-contain"
+                  />
+                </>
               ) : (
                 <div className="flex flex-col items-center text-white/55 gap-2">
                   <Play className="h-10 w-10" />
@@ -341,9 +446,20 @@ export function RepostPlayer({
                   </p>
                 </div>
               )}
+              {photoMusicUrl && (
+                <audio
+                  ref={photoAudioRef}
+                  key={`photo-music-${repost.id}`}
+                  src={proxiedMedia(photoMusicUrl, repost.webUrl)}
+                  autoPlay
+                  loop
+                  playsInline
+                  preload="auto"
+                />
+              )}
             </div>
 
-            <aside className="relative bg-[#0f0f10] border border-white/10 rounded-2xl p-5 sm:p-6 flex flex-col gap-5 w-full md:w-[22rem] overflow-y-auto max-h-[88vh]">
+            <aside className="relative flex max-h-[88vh] w-full flex-col gap-5 overflow-y-auto rounded-2xl border border-white/10 bg-[#0f0f10] p-5 sm:p-6 md:w-[22rem]">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] uppercase tracking-[0.22em] text-white/45 tnum">
                   {(index ?? 0) + 1} / {reposts.length}
@@ -512,19 +628,19 @@ export function RepostPlayer({
                 <ExternalLink className="h-3.5 w-3.5" />
               </a>
 
-              {!isPhoto && repost.playUrl && (
+              {(isPhoto || repost.playUrl) && (
                 <button
                   type="button"
                   onClick={() =>
-                    setDirectPlayerId((current) =>
+                    setCustomPlayerId((current) =>
                       current === repost.id ? null : repost.id,
                     )
                   }
                   className="text-[11px] text-white/45 transition-colors hover:text-white"
                 >
-                  {directPlayerId === repost.id
+                  {customPlayerId === repost.id
                     ? "Use TikTok player"
-                    : "Video unavailable? Try fallback player"}
+                    : "Playback issue? Use fallback player"}
                 </button>
               )}
 
@@ -549,7 +665,7 @@ export function RepostPlayer({
                 </button>
               </div>
             </aside>
-          </motion.div>
+          </div>
         </motion.div>
       )}
     </AnimatePresence>

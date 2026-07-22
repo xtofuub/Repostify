@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useDeferredValue,
   useMemo,
   useRef,
   useState,
@@ -608,6 +609,8 @@ function Results({
   const [advanced, setAdvanced] = useState<AdvancedFilters>(
     EMPTY_ADVANCED_FILTERS,
   );
+  const deferredDraft = useDeferredValue(draft);
+  const deferredAdvanced = useDeferredValue(advanced);
 
   // Stamp each repost with its canonical feed index (0 = newest reposted) so
   // observed-timing and position survive client-side sorting and filtering.
@@ -640,17 +643,22 @@ function Results({
   // always and toggle visibility via CSS, so changing the filter doesn't
   // unmount cards (preserves image cache + animation state).
   const { mask, matchedCount } = useMemo(() => {
-    const liveDraft = draft.trim().toLowerCase();
+    const liveDraft = deferredDraft.trim().toLowerCase();
     const lc = keywords.map((k) => k.toLowerCase());
     const all = liveDraft ? [...lc, liveDraft] : lc;
-    const creator = advanced.creator.trim().replace(/^@/, "").toLowerCase();
-    const from = dateBoundary(advanced.dateFrom);
-    const to = dateBoundary(advanced.dateTo, true);
-    const minViews = numericFilter(advanced.minViews);
-    const maxViews = numericFilter(advanced.maxViews);
-    const minLikes = numericFilter(advanced.minLikes);
-    const maxLikes = numericFilter(advanced.maxLikes);
-    const advancedActive = Object.values(advanced).some((value) => value.trim());
+    const creator = deferredAdvanced.creator
+      .trim()
+      .replace(/^@/, "")
+      .toLowerCase();
+    const from = dateBoundary(deferredAdvanced.dateFrom);
+    const to = dateBoundary(deferredAdvanced.dateTo, true);
+    const minViews = numericFilter(deferredAdvanced.minViews);
+    const maxViews = numericFilter(deferredAdvanced.maxViews);
+    const minLikes = numericFilter(deferredAdvanced.minLikes);
+    const maxLikes = numericFilter(deferredAdvanced.maxLikes);
+    const advancedActive = Object.values(deferredAdvanced).some((value) =>
+      value.trim(),
+    );
 
     if (all.length === 0 && !advancedActive) {
       return { mask: sorted.map(() => true), matchedCount: sorted.length };
@@ -690,7 +698,7 @@ function Results({
       return hit;
     });
     return { mask: m, matchedCount: count };
-  }, [sorted, keywords, draft, exact, advanced]);
+  }, [sorted, keywords, deferredDraft, exact, deferredAdvanced]);
 
   if (reposts.length === 0) {
     if (data.privateWebBlocked) {
@@ -1521,6 +1529,8 @@ function UploadTimeline({ reposts }: { reposts: Repost[] }) {
     canGoForward: false,
   });
   const scrollerRef = useRef<HTMLDivElement>(null);
+  const positionedRangeRef = useRef("");
+  const timelineRangeKey = `${buckets[0]?.key ?? ""}:${buckets.at(-1)?.key ?? ""}:${buckets.length}`;
 
   useEffect(() => {
     const scroller = scrollerRef.current;
@@ -1534,6 +1544,12 @@ function UploadTimeline({ reposts }: { reposts: Repost[] }) {
       });
     };
 
+    // A fresh scan should open on the most recent upload periods. Users can
+    // still move backward with the arrow or horizontal scroll.
+    if (positionedRangeRef.current !== timelineRangeKey) {
+      scroller.scrollLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+      positionedRangeRef.current = timelineRangeKey;
+    }
     updateScrollState();
     scroller.addEventListener("scroll", updateScrollState, { passive: true });
     const resizeObserver = new ResizeObserver(updateScrollState);
@@ -1543,7 +1559,7 @@ function UploadTimeline({ reposts }: { reposts: Repost[] }) {
       scroller.removeEventListener("scroll", updateScrollState);
       resizeObserver.disconnect();
     };
-  }, [buckets.length, granularity]);
+  }, [buckets.length, granularity, timelineRangeKey]);
 
   // Not worth a chart for a single period or no dated videos.
   if (buckets.length < 2) return null;
@@ -1779,18 +1795,15 @@ function RepostGrid({
         {reposts.map((r, i) => {
           const visible = visibilityMask ? visibilityMask[i] : true;
           return (
-            <motion.div
+            <div
               key={r.id}
               // Keep DOM mounted: just collapse to zero size when filtered out.
               // Preserves image cache + player nav indices.
-              className={visible ? "" : "hidden"}
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{
-                duration: 0.55,
-                delay: Math.min(i * 0.025, 0.5),
-                ease: [0.16, 1, 0.3, 1],
-              }}
+              className={
+                visible
+                  ? "[content-visibility:auto] [contain-intrinsic-size:auto_520px]"
+                  : "hidden"
+              }
             >
               <RepostCard
                 repost={r}
@@ -1802,7 +1815,7 @@ function RepostGrid({
                   setPlayingIndex(v);
                 }}
               />
-            </motion.div>
+            </div>
           );
         })}
       </div>

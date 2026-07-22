@@ -31,6 +31,10 @@ async function fetchLoginState(): Promise<LoginState | null> {
   }
 }
 
+async function syncDesktopTikTokSession() {
+  await window.repostifyDesktop?.syncTikTokSession().catch(() => undefined);
+}
+
 export function TikTokConnect() {
   const [state, setState] = useState<LoginState | null>(null);
   const [acting, setActing] = useState(false);
@@ -46,7 +50,10 @@ export function TikTokConnect() {
   useEffect(() => {
     let cancelled = false;
     void fetchLoginState().then((next) => {
-      if (!cancelled && next) setState(next);
+      if (!cancelled && next) {
+        setState(next);
+        if (next.connectedAt) void syncDesktopTikTokSession();
+      }
     });
     return () => {
       cancelled = true;
@@ -62,7 +69,10 @@ export function TikTokConnect() {
       if (s) setState(s);
       if (!s || !BUSY.includes(s.phase)) {
         stopPoll();
-        if (s?.phase === "saved") toast.success("TikTok connected");
+        if (s?.phase === "saved") {
+          await syncDesktopTikTokSession();
+          toast.success("TikTok connected");
+        }
         if (s?.phase === "timeout") toast.error("Login timed out");
         if (s?.phase === "cancelled") toast("Login cancelled");
         if (s?.phase === "error") toast.error(s.message || "Login failed");
@@ -89,7 +99,10 @@ export function TikTokConnect() {
         startPolling();
       } else {
         stopPoll();
-        if (action === "logout") toast("Disconnected");
+        if (action === "logout") {
+          await syncDesktopTikTokSession();
+          toast("Disconnected");
+        }
       }
     } catch {
       toast.error("Request failed");

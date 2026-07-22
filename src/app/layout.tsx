@@ -86,6 +86,9 @@ export default function RootLayout({
         */}
         <meta name="darkreader-lock" />
         <meta name="color-scheme" content="dark" />
+        <link rel="preconnect" href="https://www.tiktok.com" />
+        <link rel="dns-prefetch" href="https://www.tiktok.com" />
+        <link rel="dns-prefetch" href="https://sf16-music.tiktokcdn-eu.com" />
       </head>
       <body
         className="min-h-full bg-[#0a0a0b] text-white font-sans"
